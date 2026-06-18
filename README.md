@@ -202,7 +202,7 @@ Wire it into whatever hook runner you already use (pre-commit, Husky, Lefthook).
 
 **MCP server**
 
-Atheon ships a separate `atheon-mcp` binary that speaks the Model Context Protocol over stdio. Drop it into any MCP-compatible AI tool to let the assistant scan code directly:
+Atheon ships a separate `atheon-mcp` binary that speaks the Model Context Protocol over stdio. Drop it into any MCP-compatible AI tool to let the assistant scan code, files, and directories for pattern matches:
 
 ```json
 {
@@ -214,7 +214,50 @@ Atheon ships a separate `atheon-mcp` binary that speaks the Model Context Protoc
 }
 ```
 
-Available tools: `scan_string`, `scan_file`, `scan_dir`. All accept an optional `categories` array.
+Available tools: `scan_string`, `scan_file`, `scan_dir`. All accept an optional `categories` array for filtering.
+
+**Installation:**
+
+Download the `atheon-mcp` binary for your platform from [Releases](https://github.com/HoraDomu/Atheon/releases/latest) or build from source:
+
+```bash
+go build -o atheon-mcp ./cmd/mcp
+```
+
+**Usage examples:**
+
+Scan a string for secrets:
+```json
+{
+  "name": "scan_string",
+  "arguments": {
+    "content": "API_KEY=sk-1234567890abcdef",
+    "source": "environment",
+    "categories": ["secrets"]
+  }
+}
+```
+
+Scan a file:
+```json
+{
+  "name": "scan_file",
+  "arguments": {
+    "path": "/path/to/config.yaml"
+  }
+}
+```
+
+Scan a directory:
+```json
+{
+  "name": "scan_dir",
+  "arguments": {
+    "path": "/path/to/project",
+    "categories": ["secrets", "pii"]
+  }
+}
+```
 
 ---
 
