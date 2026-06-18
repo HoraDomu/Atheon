@@ -35,6 +35,30 @@ func main() {
 		}
 		fmt.Println("patterns updated.")
 
+	case "enable":
+		if len(args) < 2 {
+			fmt.Fprintln(os.Stderr, "error: enable requires a pattern name")
+			os.Exit(1)
+		}
+		if core.EnablePattern(args[1]) {
+			fmt.Printf("enabled pattern: %s\n", args[1])
+		} else {
+			fmt.Fprintf(os.Stderr, "error: pattern not found: %s\n", args[1])
+			os.Exit(1)
+		}
+
+	case "disable":
+		if len(args) < 2 {
+			fmt.Fprintln(os.Stderr, "error: disable requires a pattern name")
+			os.Exit(1)
+		}
+		if core.DisablePattern(args[1]) {
+			fmt.Printf("disabled pattern: %s\n", args[1])
+		} else {
+			fmt.Fprintf(os.Stderr, "error: pattern not found: %s\n", args[1])
+			os.Exit(1)
+		}
+
 	case "list":
 		cmdList(args[1:])
 
@@ -168,8 +192,32 @@ func cmdList(args []string) {
 		}
 		return
 	}
+	if len(args) > 0 && args[0] == "disabled" {
+		disabled := core.ListDisabledPatterns()
+		for _, p := range disabled {
+			fmt.Println(p)
+		}
+		fmt.Printf("\n%d pattern(s) disabled\n", len(disabled))
+		return
+	}
+	if len(args) > 0 && args[0] == "enabled" {
+		enabled := core.ListEnabledPatterns()
+		for _, p := range enabled {
+			fmt.Println(p)
+		}
+		fmt.Printf("\n%d pattern(s) enabled\n", len(enabled))
+		return
+	}
+	// List all patterns with enabled status
 	for _, p := range core.All() {
-		fmt.Println(p.Name())
+		status := "✓"
+		// Check if pattern implements Enabled() method
+		if bp, ok := p.(interface{ Enabled() bool }); ok {
+			if !bp.Enabled() {
+				status = "✗"
+			}
+		}
+		fmt.Printf("%s %s\n", status, p.Name())
 	}
 	fmt.Printf("\n%d pattern(s) loaded\n", len(core.All()))
 }
