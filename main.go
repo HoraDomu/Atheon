@@ -186,13 +186,31 @@ func printJSONFindings(findings []core.Finding) {
 }
 
 func cmdList(args []string) {
-	if len(args) > 0 && args[0] == "categories" {
+	// Handle category filtering
+	var categoryFilter string
+	var remainingArgs []string
+	for i, arg := range args {
+		if arg == "--category" && i+1 < len(args) {
+			categoryFilter = args[i+1]
+			remainingArgs = args[i+2:]
+			break
+		} else if strings.HasPrefix(arg, "--category=") {
+			categoryFilter = strings.TrimPrefix(arg, "--category=")
+			remainingArgs = args[i+1:]
+			break
+		} else {
+			remainingArgs = args[i:]
+			break
+		}
+	}
+
+	if len(remainingArgs) > 0 && remainingArgs[0] == "categories" {
 		for _, c := range core.Categories() {
 			fmt.Println(c)
 		}
 		return
 	}
-	if len(args) > 0 && args[0] == "disabled" {
+	if len(remainingArgs) > 0 && remainingArgs[0] == "disabled" {
 		disabled := core.ListDisabledPatterns()
 		for _, p := range disabled {
 			fmt.Println(p)
@@ -200,7 +218,7 @@ func cmdList(args []string) {
 		fmt.Printf("\n%d pattern(s) disabled\n", len(disabled))
 		return
 	}
-	if len(args) > 0 && args[0] == "enabled" {
+	if len(remainingArgs) > 0 && remainingArgs[0] == "enabled" {
 		enabled := core.ListEnabledPatterns()
 		for _, p := range enabled {
 			fmt.Println(p)
@@ -208,14 +226,27 @@ func cmdList(args []string) {
 		fmt.Printf("\n%d pattern(s) enabled\n", len(enabled))
 		return
 	}
-	for _, p := range core.All() {
+
+	// Filter patterns by category if specified
+	patterns := core.All()
+	if categoryFilter != "" {
+		var filtered []core.Pattern
+		for _, p := range patterns {
+			if bp, ok := p.(interface{ Category() string }); ok && bp.Category() == categoryFilter {
+				filtered = append(filtered, p)
+			}
+		}
+		patterns = filtered
+	}
+
+	for _, p := range patterns {
 		status := "✓"
 		if bp, ok := p.(interface{ Enabled() bool }); ok && !bp.Enabled() {
 			status = "✗"
 		}
 		fmt.Printf("%s %s\n", status, p.Name())
 	}
-	fmt.Printf("\n%d pattern(s) loaded\n", len(core.All()))
+	fmt.Printf("\n%d pattern(s) loaded\n", len(patterns))
 }
 
 func printHelp() {
@@ -230,6 +261,9 @@ usage:
   atheon --all <path>                scan all categories
   atheon list                        list loaded patterns
   atheon list categories             list available categories
+  atheon list --category <name>      list patterns in specific category
+  atheon list enabled                list enabled patterns
+  atheon list disabled               list disabled patterns
   atheon update                      download latest patterns bundle
   atheon --help                      show this message
 `)

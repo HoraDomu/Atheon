@@ -33,8 +33,9 @@ type bundlePattern struct {
 }
 
 func (p *bundlePattern) Name() string             { return p.name }
+func (p *bundlePattern) Category() string         { return p.category }
 func (p *bundlePattern) Matches(line string) bool { return p.enabled && p.re.MatchString(line) }
-func (p *bundlePattern) Enabled() bool             { return p.enabled }
+func (p *bundlePattern) Enabled() bool            { return p.enabled }
 func (p *bundlePattern) SetEnabled(enabled bool)  { p.enabled = enabled }
 
 type categoryScanner struct {
