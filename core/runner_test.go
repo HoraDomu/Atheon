@@ -123,7 +123,7 @@ func TestScanEnv(t *testing.T) {
 	}()
 
 	os.Setenv("TEST_AWS_KEY", "AKIAIOSFODNN7EXAMPLE")
-	os.Setenv("TEST_TOKEN", "regular-token")
+	os.Setenv("TEST_TOKEN", "sk_test_51Mw000000000000000000000000000000000000000000000000000000000")
 
 	findings := ScanEnv()
 
@@ -227,7 +227,10 @@ func TestBinaryExts(t *testing.T) {
 
 	for _, filename := range binaryFiles {
 		path := filepath.Join(tmpDir, filename)
-		if err := os.WriteFile(path, []byte("fake content"), 0o644); err != nil {
+		// Create realistic binary file with proper header
+		binaryContent := []byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A} // PNG header
+		binaryContent = append(binaryContent, []byte("AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE")...)
+		if err := os.WriteFile(path, binaryContent, 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
