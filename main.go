@@ -27,7 +27,10 @@ func main() {
 		args = args[1:]
 	}
 
-	cats, args := parseCategories(args)
+	cats, args, enableAll := parseCategories(args)
+	if enableAll {
+		core.EnableAllPatterns()
+	}
 	core.SetActiveCategories(cats)
 
 	if len(args) == 0 {
@@ -131,10 +134,7 @@ func main() {
 	}
 }
 
-func parseCategories(args []string) ([]string, []string) {
-	var cats []string
-	var rest []string
-	all := false
+func parseCategories(args []string) (cats []string, rest []string, enableAll bool) {
 	for _, a := range args {
 		switch {
 		case strings.HasPrefix(a, "--categories="):
@@ -145,15 +145,12 @@ func parseCategories(args []string) ([]string, []string) {
 				}
 			}
 		case a == "--all":
-			all = true
+			enableAll = true
 		default:
 			rest = append(rest, a)
 		}
 	}
-	if all {
-		return nil, rest
-	}
-	return cats, rest
+	return
 }
 
 func printFindings(findings []core.Finding, stats *core.Stats, jsonOutput bool) {
@@ -185,7 +182,7 @@ func printFindings(findings []core.Finding, stats *core.Stats, jsonOutput bool) 
 func printJSONFindings(findings []core.Finding) {
 	items := make([]map[string]any, 0, len(findings))
 	for _, f := range findings {
-		items = append(items, map[string]any{"pattern": f.Pattern, "file": f.File, "line": f.Line, "match": f.Content})
+		items = append(items, map[string]any{"pattern": f.Pattern, "file": f.File, "line": f.Line, "match": redact(f.Content)})
 	}
 	if err := json.NewEncoder(os.Stdout).Encode(items); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
@@ -200,27 +197,42 @@ func cmdList(args []string) {
 		return
 	}
 
-	// Check if category filter is specified
 	var categoryFilter string
-	if len(args) > 0 && strings.HasPrefix(args[0], "--category=") {
-		categoryFilter = strings.TrimPrefix(args[0], "--category=")
-	}
-
-	patterns := core.All()
-	if categoryFilter != "" {
-		filtered := make([]core.Pattern, 0)
-		for _, p := range patterns {
-			if p.Category() == categoryFilter {
-				filtered = append(filtered, p)
-			}
+	showEnabled := false
+	showDisabled := false
+	for _, a := range args {
+		switch {
+		case strings.HasPrefix(a, "--category="):
+			categoryFilter = strings.TrimPrefix(a, "--category=")
+		case a == "--enabled":
+			showEnabled = true
+		case a == "--disabled":
+			showDisabled = true
 		}
-		patterns = filtered
 	}
 
-	for _, p := range patterns {
-		fmt.Printf("%s [%s]\n", p.Name(), p.Category())
+	var filtered []core.Pattern
+	for _, p := range core.All() {
+		if categoryFilter != "" && p.Category() != categoryFilter {
+			continue
+		}
+		if showEnabled && !p.Enabled() {
+			continue
+		}
+		if showDisabled && p.Enabled() {
+			continue
+		}
+		filtered = append(filtered, p)
 	}
-	fmt.Printf("\n%d pattern(s) loaded\n", len(patterns))
+
+	for _, p := range filtered {
+		status := "enabled"
+		if !p.Enabled() {
+			status = "disabled"
+		}
+		fmt.Printf("%s [%s] [%s]\n", p.Name(), p.Category(), status)
+	}
+	fmt.Printf("\n%d pattern(s)\n", len(filtered))
 }
 
 func printHelp() {
@@ -232,8 +244,10 @@ usage:
   atheon --env                       scan environment variables
   atheon --json <path>               print findings as JSON
   atheon --categories=<c1,c2> <path> scan specific categories
-  atheon --all <path>                scan all categories
-  atheon list                        list loaded patterns
+  atheon --all <path>                scan all patterns including disabled ones
+  atheon list                        list all patterns with enabled/disabled status
+  atheon list --enabled              list only enabled patterns
+  atheon list --disabled             list only disabled patterns
   atheon list categories             list available categories
   atheon enable <pattern>            enable a pattern
   atheon disable <pattern>           disable a pattern

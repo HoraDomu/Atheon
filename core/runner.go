@@ -4,6 +4,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -24,11 +25,10 @@ var binaryExts = map[string]bool{
 func loadIgnorePatternsMatcher(root string) []*ignoreMatcher {
 	var matchers []*ignoreMatcher
 	for _, name := range []string{".atheonignore", ".gitignore"} {
-		m, err := compileIgnoreFile(filepath.Join(root, name))
-		if err != nil {
-			continue
+		m, _ := compileIgnoreFile(filepath.Join(root, name))
+		if m != nil {
+			matchers = append(matchers, m)
 		}
-		matchers = append(matchers, m)
 	}
 	return matchers
 }
@@ -45,6 +45,17 @@ func isIgnored(path string, matchers []*ignoreMatcher) bool {
 
 func ScanFile(path string) ([]Finding, *Stats, error) {
 	start := time.Now()
+	// Respect .atheonignore and .gitignore for files under the working directory,
+	// so that `atheon file.go` and `atheon .` agree on what gets scanned.
+	if absPath, err := filepath.Abs(path); err == nil {
+		if root, err := os.Getwd(); err == nil {
+			if rel, err := filepath.Rel(root, absPath); err == nil && !strings.HasPrefix(rel, "..") {
+				if matchers := loadIgnorePatternsMatcher(root); isIgnored(filepath.ToSlash(rel), matchers) {
+					return []Finding{}, nil, nil
+				}
+			}
+		}
+	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, nil, err
@@ -68,9 +79,12 @@ func ScanDir(root string) ([]Finding, *Stats, error) {
 		}
 		rel, _ := filepath.Rel(root, path)
 		if d.IsDir() {
-			if skipDirs[d.Name()] || isIgnored(rel, ignoreMatcher) {
+			if skipDirs[d.Name()] {
 				return filepath.SkipDir
 			}
+			// Don't SkipDir for user ignore rules — walk the dir and check files
+			// individually so negation rules (e.g. !dist/keep.yaml) can un-ignore
+			// specific files inside an otherwise-ignored directory.
 			return nil
 		}
 		if isIgnored(rel, ignoreMatcher) {
@@ -100,8 +114,10 @@ func ScanDir(root string) ([]Finding, *Stats, error) {
 
 	results := make([][]Finding, len(paths))
 	sizes := make([]int64, len(paths))
+	scanned := make([]bool, len(paths))
 	var wg sync.WaitGroup
-	sem := make(chan struct{}, 256)
+	workers := max(8, runtime.NumCPU()*8)
+	sem := make(chan struct{}, workers)
 
 	for i, p := range paths {
 		wg.Add(1)
@@ -115,19 +131,24 @@ func ScanDir(root string) ([]Finding, *Stats, error) {
 			}
 			results[i] = scanLines(string(data), p)
 			sizes[i] = int64(len(data))
+			scanned[i] = true
 		}(i, p)
 	}
 	wg.Wait()
 
 	var findings []Finding
 	var totalBytes int64
+	var filesScanned int
 	for i := range results {
+		if scanned[i] {
+			filesScanned++
+		}
 		findings = append(findings, results[i]...)
 		totalBytes += sizes[i]
 	}
 
 	return findings, &Stats{
-		Files:     len(paths),
+		Files:     filesScanned,
 		Bytes:     totalBytes,
 		ElapsedMs: time.Since(start).Milliseconds(),
 	}, nil
