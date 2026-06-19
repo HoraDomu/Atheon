@@ -97,24 +97,24 @@ func (s SeverityLevel) String() string {
 // PatternSeverity defines severity levels for different pattern types
 var PatternSeverity = map[string]SeverityLevel{
 	// Critical severity
-	"openai-api-key":                     SeverityCritical,
-	"aws-access-key-id":                 SeverityCritical,
-	"github-personal-token":             SeverityCritical,
-	"azure-client-secret":               SeverityCritical,
-	"gcp-api-key":                       SeverityCritical,
+	"openai-api-key":        SeverityCritical,
+	"aws-access-key-id":     SeverityCritical,
+	"github-personal-token": SeverityCritical,
+	"azure-client-secret":   SeverityCritical,
+	"gcp-api-key":           SeverityCritical,
 
 	// High severity
-	"azure-service-principal-secret":    SeverityHigh,
-	"azure-storage-account-key":          SeverityHigh,
-	"stripe-live-key":                    SeverityHigh,
+	"azure-service-principal-secret": SeverityHigh,
+	"azure-storage-account-key":      SeverityHigh,
+	"stripe-live-key":                SeverityHigh,
 
 	// Medium severity
-	"console-log":                       SeverityMedium,
-	"debug-print":                       SeverityMedium,
-	"todo-comment":                      SeverityMedium,
+	"console-log":  SeverityMedium,
+	"debug-print":  SeverityMedium,
+	"todo-comment": SeverityMedium,
 
 	// Low severity
-	"placeholder-code":                  SeverityLow,
-	"deprecated-function":               SeverityLow,
-	"fixme-comment":                     SeverityLow,
+	"placeholder-code":    SeverityLow,
+	"deprecated-function": SeverityLow,
+	"fixme-comment":       SeverityLow,
 }
