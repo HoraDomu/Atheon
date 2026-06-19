@@ -1,0 +1,61 @@
+#!/bin/bash
+# Pre-push hook - Final validation before pushing changes
+
+echo "=== PRE-PUSH VALIDATION ==="
+
+# Full build validation
+echo "Testing full project build..."
+if ! go build -v . 2>&1 | tail -3; then
+    echo "ERROR: Main binary build failed"
+    exit 1
+fi
+echo "✓ Main binary builds successfully"
+
+# Test both binaries if they exist
+if [ -f "cmd/mcp/main.go" ]; then
+    echo "Testing MCP server build..."
+    if ! go build -v ./cmd/mcp 2>&1 | tail -3; then
+        echo "ERROR: MCP server build failed"
+        exit 1
+    fi
+    echo "✓ MCP server builds successfully"
+fi
+
+# Run quick smoke test
+echo "Running basic functionality tests..."
+if [ -f "./atheon" ] || [ -f "./atheon.exe" ]; then
+    BINARY="./atheon"
+    [ -f "./atheon.exe" ] && BINARY="./atheon.exe"
+
+    # Test help command
+    if ! $BINARY --help >/dev/null 2>&1; then
+        echo "ERROR: Binary help command failed"
+        exit 1
+    fi
+
+    # Test list command
+    if ! $BINARY list >/dev/null 2>&1; then
+        echo "ERROR: Binary list command failed"
+        exit 1
+    fi
+
+    echo "✓ Basic functionality tests passed"
+else
+    echo "WARNING: No binary found to test"
+fi
+
+# Check for common issues
+echo "Checking for common issues..."
+
+# Ensure no trailing whitespace in Go files
+if git diff --name-only HEAD~10..HEAD | grep '\.go$' | xargs grep -l '[[:space:]]$' 2>/dev/null; then
+    echo "WARNING: Found trailing whitespace in some Go files"
+fi
+
+# Ensure no debug prints in committed code
+if git diff --name-only HEAD~10..HEAD | grep '\.go$' | xargs grep -i 'fmt\.Print.*debug\|println.*debug' 2>/dev/null; then
+    echo "WARNING: Found debug print statements in committed code"
+fi
+
+echo "=== PRE-PUSH VALIDATION PASSED ==="
+echo "Ready to push changes"
