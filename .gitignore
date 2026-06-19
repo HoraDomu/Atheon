@@ -10,5 +10,5 @@
 .pr-notes/
 
 # generated
-coverage.html
-coverage.out
+*.out
+/coverage.html
