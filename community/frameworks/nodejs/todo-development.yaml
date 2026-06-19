@@ -1,0 +1,14 @@
+name: nodejs-todo-development
+category: code-quality
+framework: nodejs
+severity: low
+match: '\bTODO\b|\bFIXME\b'
+exclude:
+  - "**/test/**"
+  - "**/__tests__/**"
+  - "**/spec/**"
+  - "**/*.test.js"
+  - "**/*.spec.js"
+  - "**/docs/**"
+  - "**/*.md"
+description: "Detects TODO and FIXME comments in Node.js projects. Excluded from test files and documentation."

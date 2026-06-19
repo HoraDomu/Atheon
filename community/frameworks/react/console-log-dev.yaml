@@ -1,0 +1,15 @@
+name: react-console-log-dev
+category: code-quality
+framework: react
+severity: medium
+match: '\bconsole\.log\('
+exclude:
+  - "**/test/**"
+  - "**/__tests__/**"
+  - "**/*.test.js"
+  - "**/*.test.jsx"
+  - "**/*.spec.js"
+  - "**/*.spec.jsx"
+  - "**/dev/**"
+  - "**/development/**"
+description: "Detects console.log statements in React development files. Excluded from test files and development directories."

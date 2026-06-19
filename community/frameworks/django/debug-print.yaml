@@ -1,0 +1,11 @@
+name: django-debug-print
+category: code-quality
+framework: django
+severity: medium
+match: '\bprint\(.*debug'
+exclude:
+  - "**/test*.py"
+  - "**/tests/**"
+  - "**/migrations/**"
+  - "**/management/commands/**"
+description: "Detects debug print statements in Django projects. Excluded from test files, migrations, and management commands."
