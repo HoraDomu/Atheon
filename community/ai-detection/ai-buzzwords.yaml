@@ -1,0 +1,2 @@
+name: ai-buzzwords
+match: '(?i)(cutting-edge|state-of-the-art|game-changing|revolutionary|paradigm shift)'

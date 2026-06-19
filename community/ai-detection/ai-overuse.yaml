@@ -1,0 +1,2 @@
+name: ai-overuse
+match: '(?i)(comprehensive|robust|seamless|streamline|leverage|harness|empower)'

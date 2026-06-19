@@ -1,0 +1,2 @@
+name: cruft
+match: '(?i)(\/\/\s*XXX|\/\/\s*HACK|\/\/\s*FIXME|\/\/\s*BUG)'

@@ -1,0 +1,2 @@
+name: ai-template
+match: '(?i)(in conclusion|to summarize|in summary|in essence|notably|significantly)'

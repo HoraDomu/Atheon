@@ -1,0 +1,2 @@
+name: mock-stub
+match: '(?i)(mock|stub|fake).*data|test.*fixture|sample.*data'
