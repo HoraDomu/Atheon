@@ -9,6 +9,14 @@
 *.iml
 .pr-notes/
 
-# generated
+# test output
+*.out
+*.prof
+*.test
 coverage.html
-coverage.out
+coverage*.out
+
+# build cache
+/test/
+/build/
+/dist/
