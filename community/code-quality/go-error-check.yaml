@@ -1,0 +1,3 @@
+name: go-error-check
+match: '(?i)(\w+,\s*:=\s*\w+\.\w+\([^)]*\);|(?:if|defer)\s+[^;]*;[^;]*;)'
+enabled: true
