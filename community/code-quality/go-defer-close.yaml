@@ -1,3 +1,2 @@
 name: go-defer-close
 match: '(?i)(f,\s*err\s*:=\s*os\.Open[^;]*;[^d]*defer\s+f\.Close\(\))'
-enabled: true

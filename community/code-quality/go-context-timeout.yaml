@@ -1,3 +1,2 @@
 name: go-context-timeout
 match: '(?i)(context\.Background\(\)|context\.TODO\(\))'
-enabled: true

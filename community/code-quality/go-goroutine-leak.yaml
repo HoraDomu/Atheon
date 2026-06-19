@@ -1,3 +1,2 @@
 name: go-goroutine-leak
 match: '(?i)(go\s+func\(\)\s*\{[^}]*\}\s*\(\)|go\s+\w+\([^)]*\)\s*$|go\s+\w+\.(.*)[^}]*$)'
-enabled: true

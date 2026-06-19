@@ -1,3 +1,2 @@
 name: go-mutex-unlock
 match: '(?i)(m\s*\.|mutex\.)Lock\(\);[^}]*\.Unlock\(\)|Lock\(\)\s*$)'
-enabled: true
