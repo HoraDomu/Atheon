@@ -18,6 +18,7 @@ var binaryExts = map[string]bool{
 	".png": true, ".jpg": true, ".jpeg": true, ".gif": true,
 	".pdf": true, ".zip": true, ".tar": true, ".gz": true,
 	".exe": true, ".bin": true, ".so": true, ".dylib": true,
+	".lock": true, ".lockfile": true,
 }
 
 func loadIgnorePatternsMatcher(root string) []*ignoreMatcher {
@@ -75,6 +76,19 @@ func ScanDir(root string) ([]Finding, *Stats, error) {
 		if isIgnored(rel, ignoreMatcher) {
 			return nil
 		}
+
+		// Skip common lock files that often cause false positives
+		base := strings.ToLower(filepath.Base(path))
+		if strings.HasSuffix(base, ".lock") ||
+			strings.HasSuffix(base, ".lockfile") ||
+			base == "package-lock.json" ||
+			base == "yarn.lock" ||
+			base == "pnpm-lock.yaml" ||
+			base == "bun.lock" ||
+			base == "cargo.lock" {
+			return nil
+		}
+
 		ext := strings.ToLower(filepath.Ext(path))
 		if !binaryExts[ext] {
 			paths = append(paths, path)
