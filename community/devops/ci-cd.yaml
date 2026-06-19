@@ -1,0 +1,2 @@
+name: ci-cd
+match: '(?i)(pipeline|workflow|jenkins|travis|circleci|gitlab|actions)'

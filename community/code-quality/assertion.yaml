@@ -1,0 +1,2 @@
+name: assertion
+match: '(?i)(assert|expect|should|must).*true|assert.*not.*null'

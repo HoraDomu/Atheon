@@ -1,0 +1,2 @@
+name: kubernetes
+match: '(?i)(apiVersion|kind:\s*Deployment|spec:\s*containers|kubectl)'
