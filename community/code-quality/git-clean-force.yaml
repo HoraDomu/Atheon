@@ -1,0 +1,2 @@
+name: git-clean-force
+match: 'git\s+clean\s+.*(-f|-d|-fd|-force)'

@@ -1,0 +1,2 @@
+name: package-manager-force
+match: '(?i)(npm\s+install.*--force|pip\s+install.*--ignore|bundle\s+install.*--force|composer\s+install.*--ignore|cargo\s+install.*--force)'

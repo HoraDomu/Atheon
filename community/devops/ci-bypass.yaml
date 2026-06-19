@@ -1,0 +1,2 @@
+name: ci-bypass
+match: '(?i)(continue-on-error|allow_failure|ignore_errors|strict.*false|when.*always.*true)'
