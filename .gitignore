@@ -12,3 +12,11 @@
 # generated
 coverage.html
 coverage.out
+
+# Claude Code project documentation
+.claude
+CLAUDE.md
+docs/PLAN.md
+docs/PROGRESS.md
+docs/TASKS.md
+mcp

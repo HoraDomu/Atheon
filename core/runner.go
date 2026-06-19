@@ -80,12 +80,12 @@ func ScanDir(root string) ([]Finding, *Stats, error) {
 		// Skip common lock files that often cause false positives
 		base := strings.ToLower(filepath.Base(path))
 		if strings.HasSuffix(base, ".lock") ||
-		   strings.HasSuffix(base, ".lockfile") ||
-		   base == "package-lock.json" ||
-		   base == "yarn.lock" ||
-		   base == "pnpm-lock.yaml" ||
-		   base == "bun.lock" ||
-		   base == "cargo.lock" {
+			strings.HasSuffix(base, ".lockfile") ||
+			base == "package-lock.json" ||
+			base == "yarn.lock" ||
+			base == "pnpm-lock.yaml" ||
+			base == "bun.lock" ||
+			base == "cargo.lock" {
 			return nil
 		}
 
