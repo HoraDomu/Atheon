@@ -10,15 +10,27 @@ import (
 	"atheon/core"
 )
 
+// version is injected at build time via ldflags
+var version = "dev"
+
 func main() {
 	args := os.Args[1:]
+
+	// Handle --version flag
+	if len(args) > 0 && args[0] == "--version" {
+		fmt.Printf("atheon %s\n", version)
+		os.Exit(0)
+	}
 
 	jsonOutput := len(args) > 0 && args[0] == "--json"
 	if jsonOutput {
 		args = args[1:]
 	}
 
-	cats, args := parseCategories(args)
+	cats, args, enableAll := parseCategories(args)
+	if enableAll {
+		core.EnableAllPatterns()
+	}
 	core.SetActiveCategories(cats)
 
 	if len(args) == 0 {
@@ -34,6 +46,28 @@ func main() {
 			os.Exit(1)
 		}
 		fmt.Println("patterns updated.")
+
+	case "enable":
+		if len(args) < 2 {
+			fmt.Fprintln(os.Stderr, "error: enable requires a pattern name")
+			os.Exit(1)
+		}
+		if !core.EnablePattern(args[1]) {
+			fmt.Fprintf(os.Stderr, "error: pattern '%s' not found\n", args[1])
+			os.Exit(1)
+		}
+		fmt.Printf("enabled pattern: %s\n", args[1])
+
+	case "disable":
+		if len(args) < 2 {
+			fmt.Fprintln(os.Stderr, "error: disable requires a pattern name")
+			os.Exit(1)
+		}
+		if !core.DisablePattern(args[1]) {
+			fmt.Fprintf(os.Stderr, "error: pattern '%s' not found\n", args[1])
+			os.Exit(1)
+		}
+		fmt.Printf("disabled pattern: %s\n", args[1])
 
 	case "list":
 		cmdList(args[1:])
@@ -100,10 +134,7 @@ func main() {
 	}
 }
 
-func parseCategories(args []string) ([]string, []string) {
-	var cats []string
-	var rest []string
-	all := false
+func parseCategories(args []string) (cats []string, rest []string, enableAll bool) {
 	for _, a := range args {
 		switch {
 		case strings.HasPrefix(a, "--categories="):
@@ -114,15 +145,12 @@ func parseCategories(args []string) ([]string, []string) {
 				}
 			}
 		case a == "--all":
-			all = true
+			enableAll = true
 		default:
 			rest = append(rest, a)
 		}
 	}
-	if all {
-		return nil, rest
-	}
-	return cats, rest
+	return
 }
 
 func printFindings(findings []core.Finding, stats *core.Stats, jsonOutput bool) {
@@ -154,7 +182,7 @@ func printFindings(findings []core.Finding, stats *core.Stats, jsonOutput bool) 
 func printJSONFindings(findings []core.Finding) {
 	items := make([]map[string]any, 0, len(findings))
 	for _, f := range findings {
-		items = append(items, map[string]any{"pattern": f.Pattern, "file": f.File, "line": f.Line, "match": f.Content})
+		items = append(items, map[string]any{"pattern": f.Pattern, "file": f.File, "line": f.Line, "match": redact(f.Content)})
 	}
 	if err := json.NewEncoder(os.Stdout).Encode(items); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
@@ -168,10 +196,43 @@ func cmdList(args []string) {
 		}
 		return
 	}
-	for _, p := range core.All() {
-		fmt.Println(p.Name())
+
+	var categoryFilter string
+	showEnabled := false
+	showDisabled := false
+	for _, a := range args {
+		switch {
+		case strings.HasPrefix(a, "--category="):
+			categoryFilter = strings.TrimPrefix(a, "--category=")
+		case a == "--enabled":
+			showEnabled = true
+		case a == "--disabled":
+			showDisabled = true
+		}
 	}
-	fmt.Printf("\n%d pattern(s) loaded\n", len(core.All()))
+
+	var filtered []core.Pattern
+	for _, p := range core.All() {
+		if categoryFilter != "" && p.Category() != categoryFilter {
+			continue
+		}
+		if showEnabled && !p.Enabled() {
+			continue
+		}
+		if showDisabled && p.Enabled() {
+			continue
+		}
+		filtered = append(filtered, p)
+	}
+
+	for _, p := range filtered {
+		status := "enabled"
+		if !p.Enabled() {
+			status = "disabled"
+		}
+		fmt.Printf("%s [%s] [%s]\n", p.Name(), p.Category(), status)
+	}
+	fmt.Printf("\n%d pattern(s)\n", len(filtered))
 }
 
 func printHelp() {
@@ -183,9 +244,13 @@ usage:
   atheon --env                       scan environment variables
   atheon --json <path>               print findings as JSON
   atheon --categories=<c1,c2> <path> scan specific categories
-  atheon --all <path>                scan all categories
-  atheon list                        list loaded patterns
+  atheon --all <path>                scan all patterns including disabled ones
+  atheon list                        list all patterns with enabled/disabled status
+  atheon list --enabled              list only enabled patterns
+  atheon list --disabled             list only disabled patterns
   atheon list categories             list available categories
+  atheon enable <pattern>            enable a pattern
+  atheon disable <pattern>           disable a pattern
   atheon update                      download latest patterns bundle
   atheon --help                      show this message
 `)

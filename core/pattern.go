@@ -4,6 +4,8 @@ import "sort"
 
 type Pattern interface {
 	Name() string
+	Category() string
+	Enabled() bool
 	Matches(line string) bool
 }
 
