@@ -1,0 +1,2 @@
+name: build-force
+match: '(?i)(npm|pip|go|cargo|mvn|gradle).*--force|install.*--ignore'

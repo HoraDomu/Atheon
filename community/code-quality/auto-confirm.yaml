@@ -1,0 +1,2 @@
+name: auto-confirm
+match: '(?i)(--assume-yes|--yes|-y|--auto-accept|--non-interactive|--batch|--quiet.*install)'
