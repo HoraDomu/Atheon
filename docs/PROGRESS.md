@@ -1,7 +1,7 @@
 # Project Progress — Atheon-Enhanced
 
 **Last Updated:** 2026-06-20
-**Current Phase:** Phase 1 — Tier 1 (this week)
+**Current Phase:** Phase 2 — Tier 2 (in progress)
 **Overall Progress:** ~5% (planning done; Tier 1 work not yet
 started)
 
@@ -73,8 +73,16 @@ for the full day-by-day breakdown.
 
 ## Phase 2 — Tier 2 (this month, target 2026-07-20)
 
-- [ ] Open 3+ PRs upstream (engine RWMutex, context
-      cancellation, bundler fixes)
+### Upstream Issues Fixed (branches pushed to origin/aliasfoxkde/Atheon)
+
+| Issue | Branch | Status |
+|---|---|---|
+| #157 scandir-error-propagation | `fix/scandir-error-propagation` | ✅ Pushed |
+| #158 list-output-deterministic | `fix/list-output-deterministic` | ✅ Pushed |
+| #156 json-flag-position-independent | `fix/json-flag-position-independent` | ✅ Pushed |
+| #127 update-reports-changes | `feat/update-reports-changes` | ✅ Pushed |
+
+- [ ] Open PRs upstream for all 4 branches
 - [ ] Build labelled dataset (`benchmarks/dataset.jsonl`)
 - [ ] Write runner (`benchmarks/runner.go`)
 - [ ] Run benchmark v1; produce `benchmarks/results/v1.md`

@@ -41,6 +41,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `~/.claude/settings.json`. Blocks the agent from writing a Go
   file that introduces an unexported helper with no callers.
   Companion to the project-local pre-commit gate.
+- `core.Categories()` now returns categories in sorted alphabetical
+  order instead of map-iteration order. Makes `atheon list
+  categories` deterministic. Contributes to upstream #158.
 
 ### Changed
 
@@ -74,6 +77,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removed dead `contains` helper in `core/bundle.go` (zero
   production callers; matches upstream #159) and the
   `TestContains` test that was its only consumer.
+- `core.ScanDir`: per-file read errors (permission changes,
+  vanished symlinks, TOCTOU races) are now surfaced through
+  `Stats.WalkErrors` instead of being silently dropped. The CLI's
+  default case prints each skipped file as a warning to stderr.
+  Fixes upstream #157 (HoraDomu/Atheon#157).
+- `atheon <path> --json` now works in any argument position instead
+  of only as the first argument. Previously `--json` after the
+  path was treated as a second path and caused a "path not
+  found" error. Fixes upstream #156
+  (HoraDomu/Atheon#156).
+- `atheon update` now reports what changed after downloading a new
+  bundle: `updated: 57 → 61 patterns (+4, -1)` with `added:` and
+  `removed:` lines. When nothing changed: `already up to date (57
+  patterns)`. Fixes upstream #127
+  (HoraDomu/Atheon#127).
 
 ## 1.0.0 — 2026-06-19
 
