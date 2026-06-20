@@ -131,6 +131,22 @@ func toolList() []map[string]any {
 				"categories": cats,
 			}),
 		},
+		{
+			"name":        "scan_url",
+			"description": "Fetch a URL and scan the response body for pattern matches (supports text/* content types)",
+			"inputSchema": schema([]string{"url"}, map[string]any{
+				"url":        map[string]any{"type": "string", "description": "the URL to fetch and scan"},
+				"categories": cats,
+			}),
+		},
+		{
+			"name":        "scan_git",
+			"description": "Shallow-clone a git repository and scan all files for pattern matches",
+			"inputSchema": schema([]string{"remote_url"}, map[string]any{
+				"remote_url": map[string]any{"type": "string", "description": "git remote URL (https://... or git@...)"},
+				"categories": cats,
+			}),
+		},
 	}
 }
 
@@ -184,6 +200,36 @@ func handleCall(ctx context.Context, params json.RawMessage) (any, *rpcError) {
 		}
 		core.SetActiveCategories(args.Categories)
 		findings, _, err := core.ScanDir(ctx, args.Path)
+		if err != nil {
+			return nil, &rpcError{Code: -32603, Message: err.Error()}
+		}
+		return textResult(findings), nil
+
+	case "scan_url":
+		var args struct {
+			URL        string   `json:"url"`
+			Categories []string `json:"categories"`
+		}
+		if err := json.Unmarshal(p.Arguments, &args); err != nil {
+			return nil, &rpcError{Code: -32602, Message: "invalid params"}
+		}
+		core.SetActiveCategories(args.Categories)
+		findings, _, err := core.ScanURL(ctx, args.URL)
+		if err != nil {
+			return nil, &rpcError{Code: -32603, Message: err.Error()}
+		}
+		return textResult(findings), nil
+
+	case "scan_git":
+		var args struct {
+			RemoteURL  string   `json:"remote_url"`
+			Categories []string `json:"categories"`
+		}
+		if err := json.Unmarshal(p.Arguments, &args); err != nil {
+			return nil, &rpcError{Code: -32602, Message: "invalid params"}
+		}
+		core.SetActiveCategories(args.Categories)
+		findings, _, err := core.ScanGitRemote(ctx, args.RemoteURL)
 		if err != nil {
 			return nil, &rpcError{Code: -32603, Message: err.Error()}
 		}

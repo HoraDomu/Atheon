@@ -131,6 +131,38 @@ func run(ctx context.Context, args []string) int {
 		}
 		return 0
 
+	case "scan-url":
+		if len(args) < 2 {
+			fmt.Fprintln(os.Stderr, "error: scan-url requires a URL")
+			return 1
+		}
+		findings, stats, err := core.ScanURL(ctx, args[1])
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "error:", err)
+			return 1
+		}
+		printFindings(findings, stats, reportFormat)
+		if len(findings) > 0 {
+			return 1
+		}
+		return 0
+
+	case "scan-git":
+		if len(args) < 2 {
+			fmt.Fprintln(os.Stderr, "error: scan-git requires a git remote URL")
+			return 1
+		}
+		findings, stats, err := core.ScanGitRemote(ctx, args[1])
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "error:", err)
+			return 1
+		}
+		printFindings(findings, stats, reportFormat)
+		if len(findings) > 0 {
+			return 1
+		}
+		return 0
+
 	default:
 		path := args[0]
 		info, err := os.Stat(path)
@@ -296,6 +328,8 @@ usage:
   atheon list                        list all patterns with enabled/disabled status
   atheon list --enabled              list only enabled patterns
   atheon list --disabled             list only disabled patterns
+  atheon scan-url <url>             scan a remote URL for secrets
+  atheon scan-git <url>             scan a remote git repository for secrets
   atheon list categories             list available categories
   atheon enable <pattern>            enable a pattern
   atheon disable <pattern>           disable a pattern

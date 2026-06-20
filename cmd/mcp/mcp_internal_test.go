@@ -214,8 +214,8 @@ func TestMainExercisesToolsList(t *testing.T) {
 	}
 	m := result.(map[string]any)
 	tools, ok := m["tools"].([]map[string]any)
-	if !ok || len(tools) != 3 {
-		t.Errorf("expected 3 tools, got %d", len(tools))
+	if !ok || len(tools) != 5 {
+		t.Errorf("expected 5 tools, got %d", len(tools))
 	}
 }
 
