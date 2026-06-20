@@ -16,6 +16,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `Makefile` — single source of truth for build, test, coverage,
+  vet, and four audit gates. Run `make help` for the catalogue;
+  `make audit` for the full quality sweep. The audit gates are
+  `audit-dead-code`, `audit-nolint`, `audit-fixmes`, and
+  `audit-sentinels`.
+- `scripts/audit-dead-code.sh` — the implementation shared by
+  `make audit-dead-code` and the new pre-commit gate. Detects
+  unexported helpers with no callers in the whole tree.
 - `.github/SUPPORT.md`, `.github/FUNDING.yml`, `.github/CODEOWNERS`,
   `.github/dependabot.yml`, `.github/ISSUE_TEMPLATE/*.md`, and
   `.github/PULL_REQUEST_TEMPLATE.md` — first-class GitHub
@@ -26,12 +34,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `docs/MIGRATION.md`, `docs/GOVERNANCE.md`, `docs/MAINTAINERS.md`,
   `docs/RELEASE.md`, `docs/PERFORMANCE.md`, `docs/PROJECTS.md`,
   `docs/STANDARDS.md` — consolidated project documentation.
+- `docs/audits/DEAD_CODE_AUDIT.md` — Phase 1.1 findings: 0 staticcheck
+  issues, 0 go vet issues, 1 dead helper (`contains`) — now removed.
+- Global PreToolUse hook
+  (`~/.claude/hooks/dead-code-prevention-hook.py`) — wired into
+  `~/.claude/settings.json`. Blocks the agent from writing a Go
+  file that introduces an unexported helper with no callers.
+  Companion to the project-local pre-commit gate.
 
 ### Changed
 
 - Moved `CODE_OF_CONDUCT.md` and `SECURITY.md` from the repository
   root to `.github/` so GitHub picks them up automatically. **No
   content change** — only the location moved.
+- `.githooks/pre-commit` — the TODO/FIXME gate's helper-extraction
+  pipeline was killed by `set -euo pipefail` whenever a commit
+  staged no new `.go` files. Added `|| true` so the script runs
+  to completion. The new `🪦 Checking for dead code in staged
+  files` step also lives here.
 
 ### Fixed
 
@@ -51,6 +71,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and `fixtures/` directories.
 - CI: `sync-stable-clean.yml` detects which layout is checked out
   (root `main.go` vs. `cmd/atheon`) before validating patterns.
+- Removed dead `contains` helper in `core/bundle.go` (zero
+  production callers; matches upstream #159) and the
+  `TestContains` test that was its only consumer.
 
 ## 1.0.0 — 2026-06-19
 

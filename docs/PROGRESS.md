@@ -101,6 +101,28 @@ for the full day-by-day breakdown.
 
 ## Recent activity
 
+### 2026-06-20 — /goal Phase 1 complete (production-quality sweep)
+
+See [`docs/GOAL_ROADMAP.md`](./GOAL_ROADMAP.md) for the full
+7-phase plan. Phase 1 (dead-code cleanup + harness integration)
+is done:
+
+- Removed dead `contains` helper (`core/bundle.go`) — closes
+  upstream #159 in the fork.
+- Added `Makefile` with `make audit` umbrella and four gates:
+  `audit-dead-code`, `audit-nolint`, `audit-fixmes`,
+  `audit-sentinels`.
+- Wired the dead-code gate into `.githooks/pre-commit` (now
+  blocks commits that introduce unexported helpers with zero
+  callers).
+- Added a global PreToolUse hook
+  (`~/.claude/hooks/dead-code-prevention-hook.py`) so the agent
+  is blocked at Write-time, not just at commit-time.
+- Pushed branch `chore/audit-dead-code-cleanup` to origin.
+
+Coverage: 97.8% (unchanged). All four packages green under
+`-race`. staticcheck, go vet clean.
+
 ### 2026-06-20 — planning complete
 
 - 18 planning documents created (~4,900 lines) in
