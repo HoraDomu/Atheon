@@ -147,6 +147,12 @@ atheon --categories=secrets,pii ./my-project
 # Use configuration profile
 atheon --profile config/profiles/pipeline.json ./my-project
 
+# Scan a remote URL for secrets
+atheon scan-url https://example.com/config.json
+
+# Scan a remote git repository
+atheon scan-git https://github.com/user/repo
+
 # List all patterns with status
 atheon list
 ```
@@ -210,9 +216,18 @@ atheon --all ./test-project
 # JSON output for automation
 atheon --json ./my-project > findings.json
 
+# SARIF output for GitHub Code Scanning
+atheon --format=sarif ./my-project > atheon-results.sarif
+
+# HTML report (self-contained, no external dependencies)
+atheon --format=html ./my-project > findings.html
+
 # Scan from stdin
 cat file.txt | atheon -
 git diff | atheon -
+
+# Run the audit pipeline and produce a structured report
+atheon audit
 ```
 
 </details>

@@ -342,6 +342,144 @@ delta. The current API is **v1** and is stable.
   major version bump. Schema versioning for the JSON
   output is tracked in `internal/report/schema.go`.
 
+---
+
+## v0.4 — Network Scanner and Structured Reporting
+
+The following APIs were added in v0.4 (the `aliasfoxkde/Atheon` enhanced fork).
+
+### Network Scanner
+
+#### `ScanURL`
+
+```go
+func ScanURL(ctx context.Context, rawURL string) ([]Finding, *Stats, error)
+```
+
+Fetch a remote URL and scan its response body. Only `text/*`,
+`application/json`, `application/xml`, and `application/javascript`
+content types are scanned; binary types return an error.
+The response body is capped at 5 MB. Redirects are not followed.
+
+#### `ScanGitRemote`
+
+```go
+func ScanGitRemote(ctx context.Context, remoteURL string) ([]Finding, *Stats, error)
+```
+
+Shallow-clone a git repository (`--depth=1 --single-branch`) into a
+temporary directory, scan all files, then remove the clone.
+The context controls cancellation. Requires `git` in `PATH`.
+
+#### `ScanGitRemoteFiles`
+
+```go
+func ScanGitRemoteFiles(ctx context.Context, remoteURL string) ([]Finding, []string, *Stats, error)
+```
+
+Like `ScanGitRemote` but also returns the absolute paths of every
+scanned file.
+
+### Structured Reporting
+
+#### `Format`
+
+```go
+type Format string
+
+const (
+    FormatText  Format = "text"
+    FormatJSON  Format = "json"
+    FormatSARIF Format = "sarif"
+    FormatHTML  Format = "html"
+)
+```
+
+Output format selector. `FormatSARIF` produces SARIF 2.1.0 compatible
+with GitHub Code Scanning.
+
+#### `Report`
+
+```go
+type Report struct {
+    Version     string    `json:"version"`
+    GeneratedAt time.Time `json:"generatedAt"`
+    ScanType   string    `json:"scanType"`
+    Target     string    `json:"target,omitempty"`
+    Stats      Stats     `json:"stats"`
+    Findings   []Finding `json:"findings"`
+    Errors     []error  `json:"errors,omitempty"`
+}
+```
+
+The canonical report structure. All four output formats are derived
+from this type.
+
+#### `Render`
+
+```go
+func Render(r Report, format Format) string
+```
+
+Render a `Report` to the requested format. Dispatches to private
+renderers: `renderText`, `renderJSON`, `renderSARIF`, `renderHTML`.
+
+### Audit Pipeline
+
+#### `Audit`
+
+```go
+func Audit(ctx context.Context, root string) (*AuditReport, error)
+```
+
+Run all audit checks against `root` and return a structured report.
+Checks: `nolint`, `todo-fixme`, `go-vet`, `sentinel-errors`.
+The `dead-code` check is a stub (enforcement is via `staticcheck`).
+
+#### `WriteReport`
+
+```go
+func WriteReport(r *AuditReport, dir string) error
+```
+
+Write `r` as both `dir/REPORT.json` (pretty-printed JSON) and
+`dir/REPORT.md` (GitHub-flavored Markdown with a findings table).
+Creates `dir` if it does not exist.
+
+#### `AuditReport`
+
+```go
+type AuditReport struct {
+    Version     string        `json:"version"`
+    GeneratedAt time.Time    `json:"generatedAt"`
+    Root        string        `json:"root"`
+    ElapsedMs   int64         `json:"elapsedMs"`
+    Results     []AuditResult `json:"results"`
+    Summary     AuditSummary  `json:"summary"`
+}
+```
+
+#### `AuditResult`
+
+```go
+type AuditResult struct {
+    Check    string         `json:"check"`
+    Passed   bool           `json:"passed"`
+    Findings []AuditFinding `json:"findings,omitempty"`
+}
+```
+
+#### `AuditFinding`
+
+```go
+type AuditFinding struct {
+    File     string `json:"file,omitempty"`
+    Line     int    `json:"line,omitempty"`
+    Message  string `json:"message"`
+    Severity string `json:"severity,omitempty"` // "error", "warning", "info"
+}
+```
+
 ## What's not part of the API
 
 - Anything under `internal/` is not importable and may

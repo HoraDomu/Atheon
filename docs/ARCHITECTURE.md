@@ -66,7 +66,7 @@ The library never exits, never writes to `os.Stdout`, never reads
 from `os.Stdin`. It is a pure Go package and it can be embedded
 in any host.
 
-### 3. Engines (`core/scan*.go`)
+### 3. Engines (`core/runner.go`, `core/scanner_net.go`, `core/scanner_git.go`)
 
 The engines are the workers that turn one input source into
 `[]Finding`. Each one implements the same shape:
@@ -82,6 +82,12 @@ The engines run in parallel where it helps. `ScanDir` uses one
 goroutine per CPU (capped) with a semaphore; `ScanString` is
 single-threaded because the input is already in memory.
 
+`core/scanner_net.go` implements `ScanURL`, which fetches a URL over
+HTTP/HTTPS, enforces a 5 MB body cap, and rejects non-text content
+types. `core/scanner_git.go` implements `ScanGitRemote`, which
+shallow-clones a repo into a temporary directory and delegates to
+`ScanDir`; the clone is removed before the function returns.
+
 ### 4. Matchers and the bundle (`core/match.go`, `core/patterns.bundle`)
 
 The matcher is a hand-written Aho-Corasick-style scanner that
@@ -93,6 +99,31 @@ Patterns are data, not code. Adding a pattern means adding a
 YAML file in `community/`, running `bundler/bundler`, and
 rebuilding. The match engine itself never changes for a new
 pattern.
+
+### 5. Structured reporting (`core/report.go`)
+
+All output flows through `core.Render`, which dispatches to one of
+four private renderers based on the requested `Format`:
+
+| Renderer | Format | Notes |
+|---|---|---|
+| `renderText` | `text` | Human-readable, one finding per line |
+| `renderJSON` | `json` | Pretty-printed with 2-space indent |
+| `renderSARIF` | `sarif` | SARIF 2.1.0; rules deduplicated by pattern name |
+| `renderHTML` | `html` | Self-contained; inline CSS, no JS or external deps |
+
+The report types (`Report`, `Format`, `Stats`, `Finding`) are defined
+in `core/report.go` alongside the renderers. `core.Render` is
+called from `cmd/atheon/main.go` via `printFindings`.
+
+### 6. Audit pipeline (`core/audit.go`)
+
+`core.Audit` runs four checks (nolint, todo-fixme, go-vet,
+sentinel-errors) and returns an `AuditReport`. `core.WriteReport`
+emits both `.json` and `.md` forms to a timestamped subdirectory of
+`docs/audits/`. The `dead-code` check is a stub; real dead-code
+enforcement lives in `staticcheck` (run by the pre-commit hook and
+`make audit-dead-code`).
 
 ## Data flow
 
