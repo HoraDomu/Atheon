@@ -56,7 +56,6 @@ func run(ctx context.Context, args []string) int {
 			fmt.Fprintln(os.Stderr, "error:", err)
 			return 1
 		}
-		fmt.Println("patterns updated.")
 		return 0
 
 	case "enable":

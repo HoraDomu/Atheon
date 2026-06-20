@@ -371,28 +371,30 @@ func diffPatternNames(oldPatterns []string, newDefs []PatternDef) (added, remove
 	return added, removed
 }
 
-// printBundleDiff writes a human-readable summary of the bundle change.
+// printBundleDiff writes a human-readable summary of the bundle change
+// to stdout. The format is the one requested by upstream issue #127:
+//
+//	updated: 57 → 61 patterns (+4)
+//	  added: hipaa-identifier, npi-number
+//	  removed: legacy-pattern
+//
+// When nothing changed it prints:
+//
+//	already up to date (57 patterns)
+//
+// Both added and removed are always shown together when both exist.
 func printBundleDiff(oldCount, newCount int, added, removed []string) {
-	fmt.Printf("Patterns updated: %d → %d\n", oldCount, newCount)
-	switch {
-	case len(added) > 0:
-		fmt.Printf("Added: %d patterns\n", len(added))
-		for _, p := range added {
-			fmt.Printf("  + %s\n", p)
-		}
-		if len(removed) > 0 {
-			fmt.Printf("Removed: %d patterns\n", len(removed))
-			for _, p := range removed {
-				fmt.Printf("  - %s\n", p)
-			}
-		}
-	case len(removed) > 0:
-		fmt.Printf("Removed: %d patterns\n", len(removed))
-		for _, p := range removed {
-			fmt.Printf("  - %s\n", p)
-		}
-	default:
-		fmt.Println("No pattern changes detected")
+	if len(added) == 0 && len(removed) == 0 {
+		fmt.Printf("already up to date (%d patterns)\n", newCount)
+		return
+	}
+	fmt.Printf("updated: %d → %d patterns (+%d, -%d)\n",
+		oldCount, newCount, len(added), len(removed))
+	if len(added) > 0 {
+		fmt.Printf("  added: %s\n", strings.Join(added, ", "))
+	}
+	if len(removed) > 0 {
+		fmt.Printf("  removed: %s\n", strings.Join(removed, ", "))
 	}
 }
 

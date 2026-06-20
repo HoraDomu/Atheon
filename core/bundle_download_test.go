@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -231,5 +232,81 @@ func TestDownloadBundleReadAllError(t *testing.T) {
 	err := DownloadBundle(context.Background())
 	if err == nil {
 		t.Error("expected error from server with truncated body")
+	}
+}
+
+// TestPrintBundleDiffAddedAndRemoved exercises the updated output format
+// from upstream issue #127: both added and removed patterns are shown.
+func TestPrintBundleDiffAddedAndRemoved(t *testing.T) {
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+	printBundleDiff(5, 7,
+		[]string{"hipaa-identifier", "npi-number"},
+		[]string{"legacy-pattern"})
+	_ = w.Close()
+	os.Stdout = oldStdout
+	out, _ := io.ReadAll(r)
+
+	if !strings.Contains(string(out), "updated: 5 → 7 patterns (+2, -1)") {
+		t.Errorf("unexpected header: %s", out)
+	}
+	if !strings.Contains(string(out), "added: hipaa-identifier, npi-number") {
+		t.Errorf("unexpected added line: %s", out)
+	}
+	if !strings.Contains(string(out), "removed: legacy-pattern") {
+		t.Errorf("unexpected removed line: %s", out)
+	}
+}
+
+// TestPrintBundleDiffNoChange exercises the no-change branch from
+// upstream issue #127.
+func TestPrintBundleDiffNoChange(t *testing.T) {
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+	printBundleDiff(57, 57, nil, nil)
+	_ = w.Close()
+	os.Stdout = oldStdout
+	out, _ := io.ReadAll(r)
+
+	if !strings.Contains(string(out), "already up to date (57 patterns)") {
+		t.Errorf("unexpected output: %s", out)
+	}
+}
+
+// TestPrintBundleDiffOnlyAdded exercises the added-only branch.
+func TestPrintBundleDiffOnlyAdded(t *testing.T) {
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+	printBundleDiff(10, 12, []string{"new-pattern"}, nil)
+	_ = w.Close()
+	os.Stdout = oldStdout
+	out, _ := io.ReadAll(r)
+
+	if !strings.Contains(string(out), "updated: 10 → 12 patterns (+1, -0)") {
+		t.Errorf("unexpected output: %s", out)
+	}
+	if !strings.Contains(string(out), "added: new-pattern") {
+		t.Errorf("unexpected output: %s", out)
+	}
+}
+
+// TestPrintBundleDiffOnlyRemoved exercises the removed-only branch.
+func TestPrintBundleDiffOnlyRemoved(t *testing.T) {
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+	printBundleDiff(10, 8, nil, []string{"stale-pattern"})
+	_ = w.Close()
+	os.Stdout = oldStdout
+	out, _ := io.ReadAll(r)
+
+	if !strings.Contains(string(out), "updated: 10 → 8 patterns (+0, -1)") {
+		t.Errorf("unexpected output: %s", out)
+	}
+	if !strings.Contains(string(out), "removed: stale-pattern") {
+		t.Errorf("unexpected output: %s", out)
 	}
 }
