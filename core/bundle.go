@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 )
@@ -197,8 +198,11 @@ func SetActiveCategories(cats []string) {
 	}
 }
 
-// Categories returns the unique, unsorted list of category labels present
-// in the current bundle. The returned slice is owned by the caller.
+// Categories returns the unique, sorted list of category labels present
+// in the current bundle, ordered alphabetically. The returned slice is
+// owned by the caller. Sorting is stable and intentional: it gives
+// `atheon list categories` and any other consumer a deterministic order
+// across runs and Go versions.
 func Categories() []string {
 	seen := map[string]bool{}
 	var cats []string
@@ -208,6 +212,7 @@ func Categories() []string {
 			cats = append(cats, p.category)
 		}
 	}
+	sort.Strings(cats)
 	return cats
 }
 

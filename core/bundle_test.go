@@ -146,6 +146,50 @@ func TestCategories(t *testing.T) {
 	}
 }
 
+// TestCategories_Sorted verifies that Categories returns its labels in
+// sorted order so `atheon list categories` and any other consumer sees a
+// deterministic order regardless of the order patterns happened to be
+// registered or loaded from the bundle. Regression test for upstream
+// issue #158 (HoraDomu/Atheon#158): list output must be deterministic.
+func TestCategories_Sorted(t *testing.T) {
+	cats := core.Categories()
+	if len(cats) < 2 {
+		t.Skip("need at least 2 categories for a sort-order test")
+	}
+	for i := 1; i < len(cats); i++ {
+		if cats[i-1] > cats[i] {
+			t.Errorf("Categories not sorted at index %d: %q > %q (full slice: %v)",
+				i, cats[i-1], cats[i], cats)
+		}
+	}
+}
+
+// TestCategories_Deterministic calls Categories twice and asserts that
+// the returned slices are equal. Catches accidental map-iteration
+// nondeterminism even when the result happens to be sorted by chance.
+func TestCategories_Deterministic(t *testing.T) {
+	first := core.Categories()
+	for i := 0; i < 5; i++ {
+		again := core.Categories()
+		if !slicesEqual(first, again) {
+			t.Fatalf("Categories returned different slices on call %d: %v vs %v",
+				i+1, first, again)
+		}
+	}
+}
+
+func slicesEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
 // TestSetPatternEnabled tests the SetPatternEnabled function
 func TestSetPatternEnabled(t *testing.T) {
 	patterns := core.All()
