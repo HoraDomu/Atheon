@@ -1,21 +1,18 @@
 # API Reference
 
-The public Go API of the `atheon` module. This file is the
-contract: anything documented here is supported; anything
-not documented here is internal and may change without
-notice. Pair this with [`DESIGN.md`](DESIGN.md) for the
-rationale behind the shapes.
+The public Go API of the `atheon` module. Anything not
+documented here is internal and may change without notice.
 
-> **Stability:** the v1 API is stable. The planned v2 API
-> is documented in [`MIGRATION.md`](MIGRATION.md).
+> **Stability:** the v1 API is stable. Breaking changes
+> require a major version bump.
 
 ## Package layout
 
 ```
-github.com/aliasfoxkde/atheon
-├── core/        — scanner engine, public API
-├── bundler/     — pattern bundle builder (library)
-└── internal/    — implementation details, not importable
+github.com/aliasfoxkde/Atheon
+├── core/      — scanner engine, public API
+├── bundler/   — pattern bundle builder (library)
+└── cmd/       — CLI and MCP server (not library API)
 ```
 
 The CLI and the MCP server live under `cmd/` and import
@@ -23,9 +20,9 @@ from `core/`; they are not part of the library API.
 
 ## `core` package
 
-The scanner engine. All public functions take a
-`context.Context` as their first argument and return a
-`*Result` (or a partial result plus an error).
+The scanner engine. All scan entry points take a
+`context.Context` as their first argument. Functions that
+mutate pattern state are also concurrency-safe.
 
 ### Types
 
@@ -33,354 +30,49 @@ The scanner engine. All public functions take a
 
 ```go
 type Finding struct {
-    RuleID    string `json:"rule_id"`
-    Category  string `json:"category"`
-    Severity  Severity `json:"severity"`
-    File      string `json:"file"`
-    Line      int    `json:"line"`
-    Column    int    `json:"column"`
-    Match     string `json:"match"`
-    Excerpt   string `json:"excerpt"`
-    Entropy   float64 `json:"entropy,omitempty"`
-    Masked    bool   `json:"masked"`
+    Pattern string // pattern name that matched
+    File    string // source path, or "env:KEY" for env scans
+    Line    int    // 1-indexed line number; 0 for env scans
+    Content string // trimmed matching line, or matching env value
 }
 ```
 
-A single match. `File` is the path as supplied to the scan
-function; callers that resolve symlinks or chdir should
-re-base `File` to the canonical path. `Masked` is true if
-the `Match` field has been redacted; the full value is not
-exported.
-
-#### `Severity`
-
-```go
-type Severity int
-
-const (
-    SeverityInfo Severity = iota
-    SeverityLow
-    SeverityMedium
-    SeverityHigh
-    SeverityCritical
-)
-```
+A single pattern match produced by any `Scan*` function.
+`File` is the path as supplied to the scan function.
 
 #### `Stats`
 
 ```go
 type Stats struct {
-    FilesScanned   int           `json:"files_scanned"`
-    FilesSkipped   int           `json:"files_skipped"`
-    BytesScanned   int64         `json:"bytes_scanned"`
-    FindingsTotal  int           `json:"findings_total"`
-    Duration       time.Duration `json:"duration_ns"`
-    PatternsLoaded int           `json:"patterns_loaded"`
+    Files      int     // number of files actually scanned
+    Bytes      int64   // total bytes scanned
+    ElapsedMs  int64   // wall-clock duration in milliseconds
+    WalkErrors []error // per-file read errors collected by ScanDir
 }
 ```
 
-Aggregate counters. `FilesSkipped` counts files the
-scanner chose not to read (binary, too large, ignore
-match, etc.) — not files that produced no findings.
-
-#### `Result`
-
-```go
-type Result struct {
-    Findings []Finding `json:"findings"`
-    Stats    Stats     `json:"stats"`
-}
-```
-
-The combined return value of every scan function. The
-`Findings` slice is sorted by `(file, line, column)` and
-is safe to range over without further locking.
-
-#### `Options`
-
-```go
-type Options struct {
-    IgnorePatterns  []string
-    IncludeGlobs    []string
-    ExcludeGlobs    []string
-    SeverityMin     Severity
-    MaxFileSize     int64
-    MaxLineLength   int
-    Redaction       bool
-    Workers         int
-    Patterns        []Pattern // overrides the default bundle
-    ReportProgress  func(Progress)
-}
-
-func DefaultOptions() Options { /* … */ }
-```
-
-Optional knobs. `Options` is passed by value to the scan
-functions; the zero value is valid and means "all
-defaults". `DefaultOptions()` returns a fully-populated
-`Options` with sensible values for an interactive CLI run.
-
-`ReportProgress`, if non-nil, is called once per file. It
-runs on a worker goroutine; implementations must be
-thread-safe and must not block.
-
-#### `Progress`
-
-```go
-type Progress struct {
-    FilesScanned int
-    FilesTotal   int // -1 if unknown
-    CurrentFile  string
-}
-```
+Aggregate counters returned alongside findings. `Files`
+excludes binary files and skipped directories; it counts
+only files whose contents were scanned. `WalkErrors`
+collects read failures encountered during directory walks
+(permission changes, TOCTOU races, broken symlinks) so
+callers that care about every skipped file can inspect
+them.
 
 #### `Pattern`
 
 ```go
-type Pattern struct {
-    ID          string
-    Category    string
-    Severity    Severity
-    Regex       *regexp.Regexp // compiled
-    Keywords    []string
-    MinEntropy  float64
-    Description string
+type Pattern interface {
+    Name() string    // stable, human-readable identifier
+    Category() string // grouping label (e.g. "secrets", "pii")
+    Enabled() bool   // whether the pattern is currently active
+    Matches(line string) bool
 }
 ```
 
-A single pattern. Constructing a `Pattern` directly is
-discouraged; load a bundle with `LoadBundle` instead.
-
-#### `Error`
-
-```go
-type Error struct {
-    Op  string
-    Err error
-}
-
-func (e *Error) Error() string
-func (e *Error) Unwrap() error
-```
-
-Wrapped errors. Use `errors.Is` and `errors.As` to inspect
-them. Common sentinels:
-
-| Sentinel | Meaning |
-|---|---|
-| `core.ErrSecretInEnv` | A secret was found in an environment variable. |
-| `core.ErrBinaryFile` | The scanner skipped a binary file. Not fatal; reported in `Stats.FilesSkipped`. |
-| `core.ErrFileTooLarge` | The scanner skipped a file over `Options.MaxFileSize`. |
-| `core.ErrLineTooLong` | A line exceeded `Options.MaxLineLength`; the line is reported as a `lines-too-long` finding. |
-| `core.ErrBundleCorrupt` | The embedded bundle failed to parse. |
-| `core.ErrContextCanceled` | The context was canceled mid-scan. |
-
-### Functions
-
-#### `ScanFile`
-
-```go
-func ScanFile(ctx context.Context, path string, opts ...Options) (*Result, error)
-```
-
-Scan a single file. `path` is opened, read line by line,
-and matched against every pattern. The function does not
-follow symlinks; resolve them yourself if you need to.
-
-```go
-result, err := core.ScanFile(ctx, "/srv/app/.env")
-if err != nil {
-    return err
-}
-for _, f := range result.Findings {
-    log.Printf("rule=%s file=%s line=%d", f.RuleID, f.File, f.Line)
-}
-```
-
-#### `ScanDir`
-
-```go
-func ScanDir(ctx context.Context, root string, opts ...Options) (*Result, error)
-```
-
-Scan every file under `root` recursively. Symlinks are
-**not** followed. Hidden directories (names starting with
-`.`) are visited unless excluded by `Options.ExcludeGlobs`.
-
-```go
-result, err := core.ScanDir(ctx, "/srv/app",
-    core.DefaultOptions(),
-)
-```
-
-#### `ScanString`
-
-```go
-func ScanString(ctx context.Context, content, name string, opts ...Options) (*Result, error)
-```
-
-Scan an in-memory string. `name` is used as the `File`
-field of any `Finding`; pick something meaningful for your
-caller (e.g. the editor buffer name).
-
-```go
-result, err := core.ScanString(ctx, source, "main.go")
-```
-
-#### `ScanEnv`
-
-```go
-func ScanEnv(ctx context.Context, opts ...Options) (*Result, error)
-```
-
-Scan the current process environment. Returns
-`core.ErrSecretInEnv` (wrapped) if any pattern matched.
-The MCP server uses this to refuse to start in a
-contaminated environment.
-
-#### `ScanStdin`
-
-```go
-func ScanStdin(ctx context.Context, opts ...Options) (*Result, error)
-```
-
-Scan stdin as a single file. The `File` field of any
-finding is set to `<stdin>`.
-
-#### `LoadBundle`
-
-```go
-func LoadBundle(path string) ([]Pattern, error)
-```
-
-Load a pattern bundle from a file produced by the
-`bundler` command. Used by callers that ship a custom
-bundle alongside their binary.
-
-#### `EmbeddedBundle`
-
-```go
-func EmbeddedBundle() ([]Pattern, error)
-```
-
-Return the bundle embedded in the `atheon` binary at
-compile time. This is what every other `Scan*` function
-uses by default.
-
-### Error handling
-
-All scan functions return a `*Result` and a non-nil
-error when the scan could not complete. A partial result
-may be returned alongside the error; inspect it before
-deciding how to proceed.
-
-```go
-result, err := core.ScanDir(ctx, root)
-if err != nil {
-    if errors.Is(err, core.ErrContextCanceled) {
-        return ctx.Err()
-    }
-    // result may still be usable
-    log.Printf("scan incomplete: %v (findings so far: %d)",
-        err, len(result.Findings))
-}
-```
-
-The CLI and the MCP server follow this pattern: never
-discard a partial result on error.
-
-## `bundler` package
-
-A library API for building pattern bundles. The CLI is a
-thin wrapper around it.
-
-### Types
-
-#### `Config`
-
-```go
-type Config struct {
-    SourceDir   string
-    OutputPath  string
-    MinPatterns int
-    Workers     int
-}
-```
-
-#### `Build`
-
-```go
-func Build(ctx context.Context, cfg Config) (*Stats, error)
-```
-
-Walk `SourceDir`, compile every `*.yaml` pattern, and
-write a bundle to `OutputPath`. Returns the bundle
-statistics (count by category, count by severity, total
-size).
-
-## Versioning
-
-The API is versioned via the import path:
-
-```go
-import "github.com/aliasfoxkde/atheon/core"
-```
-
-Breaking changes to `core` or `bundler` ship in v2; see
-[`MIGRATION.md`](MIGRATION.md) for the planned v1 → v2
-delta. The current API is **v1** and is stable.
-
-## Compatibility promises
-
-- **Public types and functions in `core/` and `bundler/`**
-  are stable within a major version. New fields may be
-  added to `Options`, `Result`, and `Stats`; existing
-  fields will not be renamed or removed.
-- **Sentinel errors** (`ErrSecretInEnv` etc.) are stable.
-  New sentinels may be added.
-- **`Finding` JSON shape** is stable: any change is a
-  major version bump. Schema versioning for the JSON
-  output is tracked in `internal/report/schema.go`.
-
----
-
-## v0.4 — Network Scanner and Structured Reporting
-
-The following APIs were added in v0.4 (the `aliasfoxkde/Atheon` enhanced fork).
-
-### Network Scanner
-
-#### `ScanURL`
-
-```go
-func ScanURL(ctx context.Context, rawURL string) ([]Finding, *Stats, error)
-```
-
-Fetch a remote URL and scan its response body. Only `text/*`,
-`application/json`, `application/xml`, and `application/javascript`
-content types are scanned; binary types return an error.
-The response body is capped at 5 MB. Redirects are not followed.
-
-#### `ScanGitRemote`
-
-```go
-func ScanGitRemote(ctx context.Context, remoteURL string) ([]Finding, *Stats, error)
-```
-
-Shallow-clone a git repository (`--depth=1 --single-branch`) into a
-temporary directory, scan all files, then remove the clone.
-The context controls cancellation. Requires `git` in `PATH`.
-
-#### `ScanGitRemoteFiles`
-
-```go
-func ScanGitRemoteFiles(ctx context.Context, remoteURL string) ([]Finding, []string, *Stats, error)
-```
-
-Like `ScanGitRemote` but also returns the absolute paths of every
-scanned file.
-
-### Structured Reporting
+The interface implemented by all scanner patterns, both
+those loaded from the embedded bundle and those registered
+programmatically via `Register`.
 
 #### `Format`
 
@@ -395,8 +87,8 @@ const (
 )
 ```
 
-Output format selector. `FormatSARIF` produces SARIF 2.1.0 compatible
-with GitHub Code Scanning.
+Output format selector passed to `Render`. `FormatSARIF`
+produces SARIF 2.1.0 compatible with GitHub Code Scanning.
 
 #### `Report`
 
@@ -404,7 +96,7 @@ with GitHub Code Scanning.
 type Report struct {
     Version     string    `json:"version"`
     GeneratedAt time.Time `json:"generatedAt"`
-    ScanType   string    `json:"scanType"`
+    ScanType   string    `json:"scanType"`   // "file", "dir", "string", "env", "url", "git"
     Target     string    `json:"target,omitempty"`
     Stats      Stats     `json:"stats"`
     Findings   []Finding `json:"findings"`
@@ -412,39 +104,10 @@ type Report struct {
 }
 ```
 
-The canonical report structure. All four output formats are derived
-from this type.
-
-#### `Render`
-
-```go
-func Render(r Report, format Format) string
-```
-
-Render a `Report` to the requested format. Dispatches to private
-renderers: `renderText`, `renderJSON`, `renderSARIF`, `renderHTML`.
-
-### Audit Pipeline
-
-#### `Audit`
-
-```go
-func Audit(ctx context.Context, root string) (*AuditReport, error)
-```
-
-Run all audit checks against `root` and return a structured report.
-Checks: `nolint`, `todo-fixme`, `go-vet`, `sentinel-errors`.
-The `dead-code` check is a stub (enforcement is via `staticcheck`).
-
-#### `WriteReport`
-
-```go
-func WriteReport(r *AuditReport, dir string) error
-```
-
-Write `r` as both `dir/REPORT.json` (pretty-printed JSON) and
-`dir/REPORT.md` (GitHub-flavored Markdown with a findings table).
-Creates `dir` if it does not exist.
+Canonical report structure. All four output formats are
+derived from this type. The `Errors` field collects
+scan-level errors (as opposed to per-file `WalkErrors`,
+which live in `Stats`).
 
 #### `AuditReport`
 
@@ -459,15 +122,19 @@ type AuditReport struct {
 }
 ```
 
+Complete output of an `Audit` run.
+
 #### `AuditResult`
 
 ```go
 type AuditResult struct {
     Check    string         `json:"check"`
     Passed   bool           `json:"passed"`
-    Findings []AuditFinding `json:"findings,omitempty"`
+    Findings []AuditFinding  `json:"findings,omitempty"`
 }
 ```
+
+Outcome of a single audit check.
 
 #### `AuditFinding`
 
@@ -480,16 +147,284 @@ type AuditFinding struct {
 }
 ```
 
+A single item produced by an audit check.
+
+### Sentinel Errors
+
+```go
+var (
+    ErrPatternNotFound = errors.New("pattern not found")
+    ErrBundleDownload  = errors.New("bundle download failed")
+    ErrBundleParse     = errors.New("bundle parse failed")
+    ErrInvalidPattern  = errors.New("invalid pattern")
+)
+```
+
+Callers should use `errors.Is` to compare against these
+rather than string-matching error messages.
+
+### Functions
+
+#### ScanFile
+
+```go
+func ScanFile(ctx context.Context, path string) ([]Finding, *Stats, error)
+```
+
+Read and scan a single file. Honors `.atheonignore` and
+`.gitignore` when the file is under the current working
+directory. Returns `ctx.Err()` if the context is canceled
+before the read completes.
+
+```go
+findings, stats, err := core.ScanFile(ctx, "/srv/app/.env")
+```
+
+#### ScanDir
+
+```go
+func ScanDir(ctx context.Context, root string) ([]Finding, *Stats, error)
+```
+
+Recursively scan every non-binary, non-ignored file under
+`root`. Uses one worker per CPU (capped at a sensible
+maximum). Honors ignore files at `root`. The context
+controls worker cancellation; if canceled mid-walk the
+goroutines exit and `ScanDir` returns `ctx.Err()` after
+the `WaitGroup` drains.
+
+```go
+findings, stats, err := core.ScanDir(ctx, "/srv/app")
+```
+
+#### ScanString
+
+```go
+func ScanString(ctx context.Context, content, source string) ([]Finding, *Stats, error)
+```
+
+Scan an in-memory string. `source` is recorded as the
+`File` field on each finding (e.g. the editor buffer
+name). The context is checked between lines.
+
+```go
+findings, _, _ := core.ScanString(ctx, source, "main.go")
+```
+
+#### ScanEnv
+
+```go
+func ScanEnv(ctx context.Context) []Finding
+```
+
+Scan the current process environment variables for matches
+against the active patterns. Each finding uses `"env:KEY"`
+as its `File` and the matching value as `Content`; `Line`
+is zero. The context is checked between iterations.
+
+```go
+findings := core.ScanEnv(ctx)
+```
+
+#### ScanURL
+
+```go
+func ScanURL(ctx context.Context, rawURL string) ([]Finding, *Stats, error)
+```
+
+Fetch a remote URL and scan its response body. Only
+`text/*`, `application/json`, `application/xml`, and
+`application/javascript` content types are scanned; binary
+types return an error. Response body is capped at 5 MB.
+Redirects are not followed.
+
+#### ScanGitRemote
+
+```go
+func ScanGitRemote(ctx context.Context, remoteURL string) ([]Finding, *Stats, error)
+```
+
+Shallow-clone a git repository (`--depth=1 --single-branch`)
+into a temporary directory, scan all files, then remove the
+clone. The context controls cancellation. Requires `git` in
+`PATH`.
+
+#### ScanGitRemoteFiles
+
+```go
+func ScanGitRemoteFiles(ctx context.Context, remoteURL string) ([]Finding, []string, *Stats, error)
+```
+
+Like `ScanGitRemote` but also returns the absolute paths
+of every scanned file.
+
+#### Render
+
+```go
+func Render(r Report, format Format) string
+```
+
+Render a `Report` to the requested format. Dispatches to
+internal renderers for text, JSON, SARIF, and HTML output.
+
+```go
+output := core.Render(report, core.FormatJSON)
+```
+
+#### Register
+
+```go
+func Register(p Pattern)
+```
+
+Add `p` to the active registry. Safe to call before or
+after bundle load. External patterns survive bundle loads
+and appear alongside bundle patterns in `All()` calls.
+
+#### All
+
+```go
+func All() []Pattern
+```
+
+Return a sorted snapshot of all registered patterns ordered
+by `Name()`. The returned slice is owned by the caller.
+
+#### EnablePattern
+
+```go
+func EnablePattern(name string) bool
+```
+
+Enable the named pattern, rebuild the active scanner set,
+and persist the new state. Returns `false` if no pattern
+with that name exists.
+
+#### DisablePattern
+
+```go
+func DisablePattern(name string) bool
+```
+
+Disable the named pattern, rebuild the active scanner set,
+and persist the new state. Returns `false` if no pattern
+with that name exists.
+
+#### SetActiveCategories
+
+```go
+func SetActiveCategories(cats []string)
+```
+
+Restrict subsequent scans to the named categories. A nil
+or empty slice means "all categories". Rebuilds the internal
+pre-filter regexes used by `ScanFile` and `ScanDir`.
+
+#### ListEnabledPatterns
+
+```go
+func ListEnabledPatterns() []string
+```
+
+Return the names of every currently-enabled pattern, in
+bundle order.
+
+#### ListDisabledPatterns
+
+```go
+func ListDisabledPatterns() []string
+```
+
+Return the names of every currently-disabled pattern, in
+bundle order.
+
+#### EnableAllPatterns
+
+```go
+func EnableAllPatterns()
+```
+
+Enable every pattern in the bundle and rebuild the active
+scanner set.
+
+#### Categories
+
+```go
+func Categories() []string
+```
+
+Return the unique, sorted list of category labels in the
+current bundle.
+
+#### DownloadBundle
+
+```go
+func DownloadBundle(ctx context.Context) error
+```
+
+Fetch the latest pattern bundle from the configured URL,
+compare it against the in-memory bundle, print a summary of
+added/removed patterns, and persist the new bundle to
+`~/.atheon/patterns.bundle`. The context controls the HTTP
+request lifecycle.
+
+#### SetBundleDownloadURL
+
+```go
+func SetBundleDownloadURL(url string) func()
+```
+
+Swap the upstream URL used by `DownloadBundle`. Returns a
+restore function to reset the URL after tests or overrides.
+
+#### Audit
+
+```go
+func Audit(ctx context.Context, root string) (*AuditReport, error)
+```
+
+Run all audit checks against `root` and return a structured
+report. Checks: `nolint`, `todo-fixme`, `go-vet`,
+`sentinel-errors`. The `dead-code` check is a stub;
+enforcement is via `staticcheck` in CI. The context is
+propagated to all subprocess calls (`grep`, `go vet`).
+
+#### WriteReport
+
+```go
+func WriteReport(r *AuditReport, dir string) error
+```
+
+Write `r` as both `dir/REPORT.json` (pretty-printed JSON)
+and `dir/REPORT.md` (GitHub-flavored Markdown with a
+findings table). Creates `dir` if it does not exist.
+
+## Bundler CLI
+
+The `bundler` directory is a CLI tool, not a library. It is invoked
+with `go run ./bundler/main.go <source-dir> <output-file>` and is
+documented in `docs/ARCHITECTURE.md`. Its internals are not part of
+the public API.
+
 ## What's not part of the API
 
-- Anything under `internal/` is not importable and may
-  change without notice.
+- Anything under `internal/` is not importable.
 - The CLI's flag set, exit codes, and output format are
-  documented in [`CLI.md`](CLI.md) and are versioned
-  independently from the library API.
-- The MCP server's tool surface is documented in
-  [`MCP.md`](MCP.md) and follows its own deprecation
-  policy.
-- The pattern YAML schema is documented in
-  [`PATTERNS.md`](PATTERNS.md) and is stable across the
-  v1 line.
+  documented in `CLI.md`.
+- The MCP server's tool surface is documented in `MCP.md`.
+- The pattern YAML schema is documented in `PATTERNS.md`.
+
+## Version history
+
+- **v0.4** — Added `ScanURL`, `ScanGitRemote`,
+  `ScanGitRemoteFiles`, `Report`, `Render`, `Format`,
+  `Audit`, `WriteReport`, `AuditReport`, `AuditResult`,
+  `AuditFinding`, `ScanEnv`, `EnablePattern`,
+  `DisablePattern`, `SetPatternEnabled`,
+  `SetActiveCategories`, `ListEnabledPatterns`,
+  `ListDisabledPatterns`, `EnableAllPatterns`,
+  `Register`, `All`, `Categories`,
+  `DownloadBundle`, `SetBundleDownloadURL`.
+- **v0.3 and earlier** — `ScanFile`, `ScanDir`,
+  `ScanString`, `Finding`, `Stats`, `Pattern` interface,
+  sentinel errors.

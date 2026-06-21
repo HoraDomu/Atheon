@@ -60,12 +60,12 @@ func Audit(ctx context.Context, root string) (*AuditReport, error) {
 
 	checks := []struct {
 		name string
-		fn   func(string) AuditResult
+		fn   func(context.Context, string) AuditResult
 	}{
 		// dead-code check is handled by staticcheck in pre-commit and make audit;
 		// the naive static-analysis approach here produces too many false positives.
 		//nolint:gocritic // intentionally minimal for Phase 5
-		{"dead-code", func(string) AuditResult { return AuditResult{Check: "dead-code", Passed: true} }},
+		{"dead-code", func(context.Context, string) AuditResult { return AuditResult{Check: "dead-code", Passed: true} }},
 		{"nolint", runNolintCheck},
 		{"todo-fixme", runTodoFixmeCheck},
 		{"go-vet", runVetCheck},
@@ -73,7 +73,7 @@ func Audit(ctx context.Context, root string) (*AuditReport, error) {
 	}
 
 	for _, c := range checks {
-		results = append(results, c.fn(root))
+		results = append(results, c.fn(ctx, root))
 	}
 
 	var failed int
@@ -157,9 +157,9 @@ func WriteReport(r *AuditReport, dir string) error {
 
 // ---- check implementations ----
 
-func runNolintCheck(root string) AuditResult {
+func runNolintCheck(ctx context.Context, root string) AuditResult {
 	res := AuditResult{Check: "nolint", Passed: true}
-	cmd := exec.Command("grep", "-rn", "--include=*.go", "//nolint", root)
+	cmd := exec.CommandContext(ctx, "grep", "-rn", "--include=*.go", "//nolint", root)
 	out, _ := cmd.Output()
 	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
 		if line == "" {
@@ -180,9 +180,9 @@ func runNolintCheck(root string) AuditResult {
 	return res
 }
 
-func runTodoFixmeCheck(root string) AuditResult {
+func runTodoFixmeCheck(ctx context.Context, root string) AuditResult {
 	res := AuditResult{Check: "todo-fixme", Passed: true}
-	cmd := exec.Command("grep", "-rn", "--include=*.go", `-E`, `// *(TODO|FIXME|XXX)`, root)
+	cmd := exec.CommandContext(ctx, "grep", "-rn", "--include=*.go", `-E`, `// *(TODO|FIXME|XXX)`, root)
 	out, _ := cmd.Output()
 	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
 		if line == "" {
@@ -203,9 +203,9 @@ func runTodoFixmeCheck(root string) AuditResult {
 	return res
 }
 
-func runVetCheck(root string) AuditResult {
+func runVetCheck(ctx context.Context, root string) AuditResult {
 	res := AuditResult{Check: "go-vet", Passed: true}
-	cmd := exec.Command("go", "vet", "./...")
+	cmd := exec.CommandContext(ctx, "go", "vet", "./...")
 	cmd.Dir = root
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
@@ -225,12 +225,17 @@ func runVetCheck(root string) AuditResult {
 	return res
 }
 
-func runSentinelCheck(root string) AuditResult {
+func runSentinelCheck(ctx context.Context, root string) AuditResult {
 	res := AuditResult{Check: "sentinel-errors", Passed: true}
 	// Find exported sentinel errors (var ErrFoo = errors.New("..."))
 	sentinelRe := regexp.MustCompile(`^var (Err[A-Z][A-Za-z0-9_]*) = errors\.New`)
 	var sens []string
 	_ = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
 		if err != nil || info.IsDir() || !strings.HasSuffix(path, ".go") {
 			return nil
 		}
@@ -245,7 +250,7 @@ func runSentinelCheck(root string) AuditResult {
 	sort.Strings(sens)
 
 	for _, s := range sens {
-		cmd := exec.Command("grep", "-rl", `--include=*.go`,
+		cmd := exec.CommandContext(ctx, "grep", "-rl", `--include=*.go`,
 			fmt.Sprintf(`\b%s\b`, s), root)
 		out, _ := cmd.Output()
 		if strings.TrimSpace(string(out)) == "" {

@@ -215,8 +215,8 @@ func TestMainExercisesToolsList(t *testing.T) {
 	}
 	m := result.(map[string]any)
 	tools, ok := m["tools"].([]map[string]any)
-	if !ok || len(tools) != 5 {
-		t.Errorf("expected 5 tools, got %d", len(tools))
+	if !ok || len(tools) != 7 {
+		t.Errorf("expected 7 tools, got %d", len(tools))
 	}
 }
 
@@ -357,5 +357,59 @@ func TestMainExercisesInvalidJSONSkipped(t *testing.T) {
 		if err == nil && l == lines[0] {
 			t.Error("expected error for invalid line")
 		}
+	}
+}
+
+// TestHandleCallScanEnv exercises the scan_env tool.
+func TestHandleCallScanEnv(t *testing.T) {
+	params := json.RawMessage(`{"name":"scan_env","arguments":{}}`)
+	result, rerr := handleCall(context.Background(), params)
+	if rerr != nil {
+		t.Fatalf("unexpected error: %v", rerr)
+	}
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+}
+
+// TestHandleCallScanEnvBadArgs exercises scan_env with invalid args.
+func TestHandleCallScanEnvBadArgs(t *testing.T) {
+	params := json.RawMessage(`{"name":"scan_env","arguments":{"categories":"not-an-array"}}`)
+	_, rerr := handleCall(context.Background(), params)
+	if rerr == nil || rerr.Code != -32602 {
+		t.Errorf("expected invalid-params -32602, got %v", rerr)
+	}
+}
+
+// TestHandleCallListPatterns exercises the list_patterns tool.
+func TestHandleCallListPatterns(t *testing.T) {
+	params := json.RawMessage(`{"name":"list_patterns","arguments":{"enabled":true}}`)
+	result, rerr := handleCall(context.Background(), params)
+	if rerr != nil {
+		t.Fatalf("unexpected error: %v", rerr)
+	}
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+}
+
+// TestHandleCallListPatternsBoth exercises list_patterns requesting both enabled and disabled.
+func TestHandleCallListPatternsBoth(t *testing.T) {
+	params := json.RawMessage(`{"name":"list_patterns","arguments":{"enabled":true,"disabled":true}}`)
+	result, rerr := handleCall(context.Background(), params)
+	if rerr != nil {
+		t.Fatalf("unexpected error: %v", rerr)
+	}
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+}
+
+// TestHandleCallListPatternsBadArgs exercises list_patterns with invalid args.
+func TestHandleCallListPatternsBadArgs(t *testing.T) {
+	params := json.RawMessage(`{"name":"list_patterns","arguments":{"enabled":"not-a-bool"}}`)
+	_, rerr := handleCall(context.Background(), params)
+	if rerr == nil || rerr.Code != -32602 {
+		t.Errorf("expected invalid-params -32602, got %v", rerr)
 	}
 }

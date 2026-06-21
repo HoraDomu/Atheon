@@ -49,10 +49,6 @@ func TestRegisteredPatterns(t *testing.T) {
 			},
 			nonMatches: []string{`"private_key_id": "short"`, `"client_email": "svc@example.com"`},
 		},
-		"github-pat": {
-			matches:    []string{"token=ghp_" + strings.Repeat("a", 36)},
-			nonMatches: []string{"token=ghp_short", "token=github_pat_" + strings.Repeat("a", 36)},
-		},
 		"openai-api-key": {
 			matches:    []string{"OPENAI_API_KEY=sk-" + strings.Repeat("a", 20)},
 			nonMatches: []string{"OPENAI_API_KEY=sk-short", "OPENAI_API_KEY=pk-" + strings.Repeat("a", 20)},
@@ -62,12 +58,40 @@ func TestRegisteredPatterns(t *testing.T) {
 			nonMatches: []string{"version=555-123", "ticket=555-123-456"},
 		},
 		"slack-bot-token": {
-			matches:    []string{"SLACK_BOT_TOKEN=xoxb-12345678901-12345678901-" + strings.Repeat("a", 24)},
-			nonMatches: []string{"SLACK_BOT_TOKEN=xoxb-short", "SLACK_BOT_TOKEN=xoxa-12345678901-12345678901-" + strings.Repeat("a", 24)},
+			matches:    []string{"SLACK_BOT_TOKEN=xoxb-12345678901-12345678901-" + strings.Repeat("a", 24), "SLACK_BOT_TOKEN=xoxs-12345678901-12345678901-" + strings.Repeat("a", 24)},
+			nonMatches: []string{"SLACK_BOT_TOKEN=xoxb-short", "SLACK_BOT_TOKEN=xoxe-12345678901-12345678901-" + strings.Repeat("a", 24)},
 		},
 		"stripe-secret-key": {
 			matches:    []string{"STRIPE_SECRET_KEY=sk_live_" + strings.Repeat("a", 24)},
 			nonMatches: []string{"STRIPE_SECRET_KEY=sk_test_" + strings.Repeat("a", 24), "STRIPE_SECRET_KEY=sk_live_short"},
+		},
+		"stripe-test-key": {
+			matches:    []string{"STRIPE_TEST_KEY=sk_test_" + strings.Repeat("a", 24)},
+			nonMatches: []string{"STRIPE_TEST_KEY=sk_live_" + strings.Repeat("a", 24), "STRIPE_TEST_KEY=sk_test_short"},
+		},
+		"stripe-restricted-key": {
+			matches:    []string{"STRIPE_KEY=rk_live_" + strings.Repeat("a", 24)},
+			nonMatches: []string{"STRIPE_KEY=sk_live_" + strings.Repeat("a", 24), "STRIPE_KEY=rk_live_short"},
+		},
+		"stripe-webhook-secret": {
+			matches:    []string{"STRIPE_WEBHOOK=whsec_" + strings.Repeat("a", 24)},
+			nonMatches: []string{"STRIPE_WEBHOOK=sk_live_" + strings.Repeat("a", 24), "STRIPE_WEBHOOK=whsec_short"},
+		},
+		"github-pat": {
+			matches:    []string{"GITHUB_TOKEN=ghp_" + strings.Repeat("a", 36)},
+			nonMatches: []string{"GITHUB_TOKEN=ghp_short", "GITHUB_TOKEN=gho_" + strings.Repeat("a", 36)},
+		},
+		"github-oauth-token": {
+			matches:    []string{"GITHUB_TOKEN=gho_" + strings.Repeat("a", 36)},
+			nonMatches: []string{"GITHUB_TOKEN=gho_short", "GITHUB_TOKEN=ghp_" + strings.Repeat("a", 36)},
+		},
+		"github-user-token": {
+			matches:    []string{"GITHUB_TOKEN=ghu_" + strings.Repeat("a", 36)},
+			nonMatches: []string{"GITHUB_TOKEN=ghu_short", "GITHUB_TOKEN=ghp_" + strings.Repeat("a", 36)},
+		},
+		"github-refresh-token": {
+			matches:    []string{"GITHUB_TOKEN=ghr_" + strings.Repeat("a", 36)},
+			nonMatches: []string{"GITHUB_TOKEN=ghr_short", "GITHUB_TOKEN=ghp_" + strings.Repeat("a", 36)},
 		},
 		"twilio-account-sid": {
 			matches:    []string{"TWILIO_ACCOUNT_SID=AC" + strings.Repeat("a", 32)},

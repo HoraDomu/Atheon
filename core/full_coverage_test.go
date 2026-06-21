@@ -93,24 +93,46 @@ func TestSetActiveCategoriesFull(t *testing.T) {
 	}
 }
 
-// TestBundlePatternEnabledState tests enabled state persistence
+// TestBundlePatternEnabledState tests enabled state via the public API.
 func TestBundlePatternEnabledState(t *testing.T) {
-	p := &bundlePattern{name: "test-pattern", category: "test", enabled: true}
+	// Find an actual pattern from the bundle to test with.
+	pats := ListEnabledPatterns()
+	if len(pats) == 0 {
+		t.Fatal("need at least one enabled pattern")
+	}
+	name := pats[0]
 
-	// Test initial state
-	if !p.Enabled() {
-		t.Error("Expected pattern to be enabled")
+	// Confirm it starts enabled, disable it, confirm it's disabled.
+	if !DisablePattern(name) {
+		t.Fatalf("DisablePattern(%q) returned false", name)
+	}
+	if ListEnabledPatterns()[0] == name {
+		// ListEnabledPatterns rebuilds the list; check name is gone
+		found := false
+		for _, n := range ListEnabledPatterns() {
+			if n == name {
+				found = true
+				break
+			}
+		}
+		if found {
+			t.Error("pattern should be disabled after DisablePattern")
+		}
 	}
 
-	// Test SetEnabled
-	p.SetEnabled(false)
-	if p.Enabled() {
-		t.Error("Expected pattern to be disabled")
+	// Re-enable and confirm it's back.
+	if !EnablePattern(name) {
+		t.Fatalf("EnablePattern(%q) returned false", name)
 	}
-
-	p.SetEnabled(true)
-	if !p.Enabled() {
-		t.Error("Expected pattern to be enabled")
+	found := false
+	for _, n := range ListEnabledPatterns() {
+		if n == name {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("pattern should be enabled after EnablePattern")
 	}
 }
 

@@ -134,14 +134,3 @@ func TestScanGitRemote_CancelledContext(t *testing.T) {
 		t.Error("expected error from cancelled context")
 	}
 }
-
-// cloneTimeEstimate is a stub that always returns 0.
-// It exists for future use by progress reporters.
-//
-//nolint:gocritic
-func TestCloneTimeEstimate_Stub(t *testing.T) {
-	got := cloneTimeEstimate("https://example.com/repo")
-	if got != 0 {
-		t.Errorf("cloneTimeEstimate: got %v, want 0", got)
-	}
-}

@@ -98,7 +98,7 @@ func TestAtoiSafe(t *testing.T) {
 }
 
 func TestRunNolintCheck(t *testing.T) {
-	res := runNolintCheck(".")
+	res := runNolintCheck(context.Background(), ".")
 	if res.Check != "nolint" {
 		t.Errorf("expected check name 'nolint', got %q", res.Check)
 	}
@@ -107,7 +107,7 @@ func TestRunNolintCheck(t *testing.T) {
 }
 
 func TestRunTodoFixmeCheck(t *testing.T) {
-	res := runTodoFixmeCheck(".")
+	res := runTodoFixmeCheck(context.Background(), ".")
 	if res.Check != "todo-fixme" {
 		t.Errorf("expected check name 'todo-fixme', got %q", res.Check)
 	}
@@ -115,7 +115,7 @@ func TestRunTodoFixmeCheck(t *testing.T) {
 }
 
 func TestRunVetCheck(t *testing.T) {
-	res := runVetCheck(".")
+	res := runVetCheck(context.Background(), ".")
 	if res.Check != "go-vet" {
 		t.Errorf("expected check name 'go-vet', got %q", res.Check)
 	}
@@ -123,7 +123,7 @@ func TestRunVetCheck(t *testing.T) {
 }
 
 func TestRunSentinelCheck(t *testing.T) {
-	res := runSentinelCheck(".")
+	res := runSentinelCheck(context.Background(), ".")
 	if res.Check != "sentinel-errors" {
 		t.Errorf("expected check name 'sentinel-errors', got %q", res.Check)
 	}
@@ -154,7 +154,7 @@ func TestWriteReport_CreatesDirectory(t *testing.T) {
 // which has a nolint:gocritic comment.
 func TestAudit_NolintFindings(t *testing.T) {
 	// Run nolint check against this directory.
-	res := runNolintCheck(".")
+	res := runNolintCheck(context.Background(), ".")
 	// This file (audit_test.go) is the only source, but it may not have
 	// any nolint comments — the check should not panic either way.
 	_ = res.Findings
@@ -162,7 +162,7 @@ func TestAudit_NolintFindings(t *testing.T) {
 
 // TestAudit_TodoFixmeFindings exercises the todo-fixme check.
 func TestAudit_TodoFixmeFindings(t *testing.T) {
-	res := runTodoFixmeCheck(".")
+	res := runTodoFixmeCheck(context.Background(), ".")
 	_ = res.Findings
 }
 

@@ -11,8 +11,8 @@ import (
 func TestToolList(t *testing.T) {
 	tools := toolList()
 
-	if len(tools) != 5 {
-		t.Errorf("expected 5 tools, got %d", len(tools))
+	if len(tools) != 7 {
+		t.Errorf("expected 7 tools, got %d", len(tools))
 	}
 
 	// Verify tool structure

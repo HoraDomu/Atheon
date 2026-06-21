@@ -9,6 +9,10 @@ permissions:
   contents: write
   actions: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   sync:
     name: Sync stable/clean branch
@@ -32,6 +36,12 @@ jobs:
           git config user.email "actions@github.com"
           git merge upstream/main -m "Sync with upstream HoraDomu/Atheon main ($(date +%Y-%m-%d))"
           git push origin stable/clean
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
 
       - name: Run tests after sync
         run: |

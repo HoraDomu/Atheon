@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"time"
 )
 
 // ScanGitRemote shallow-clones a git repository and scans it for pattern
@@ -74,13 +73,4 @@ func ScanGitRemoteFiles(ctx context.Context, remoteURL string) ([]Finding, []str
 		return findings, scannedPaths, stats, err
 	}
 	return findings, scannedPaths, stats, nil
-}
-
-// cloneTimeEstimate returns a rough estimate of how long a shallow clone would
-// take for a remote URL. This is used by progress reporters.
-// Currently returns 0 — timing is measured by ScanGitRemote internally.
-func cloneTimeEstimate(url string) time.Duration {
-	// TODO: parse .git/config or use git ls-remote --dry-run to estimate size.
-	_ = url
-	return 0
 }

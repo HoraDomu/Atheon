@@ -11,6 +11,10 @@ permissions:
   actions: read
   security-events: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   self-scan:
     runs-on: ubuntu-latest
@@ -21,7 +25,8 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: '1.25'
+          cache: true
 
       - name: Build Atheon
         run: |
@@ -38,14 +43,14 @@ jobs:
             cat findings.json
             echo ""
             echo "Checking for false positives (test files, examples)..."
-            # Filter out test files and expected findings
-            real_issues=$(jq '[.[] | select(.file | test("_test.go") | not)] | select(.file | test("example")) | length' findings.json || echo "0")
+            # Filter out test files and example/example_test files; anything remaining is a real issue
+            real_issues=$(jq '[.[] | select(.file | test("_test.go$") | not) | select(.file | test("^examples?/") | not)] | length' findings.json 2>/dev/null || echo "0")
             if [ "$real_issues" -gt 0 ]; then
               echo "ERROR: Found $real_issues real issues in source code"
-              jq '[.[] | select(.file | test("_test.go") | not)] | select(.file | test("example")) | not]' findings.json
+              jq '[.[] | select(.file | test("_test.go$") | not) | select(.file | test("^examples?/") | not)]' findings.json
               exit 1
             else
-              echo "All findings are in test files (expected)"
+              echo "All findings are in test files or examples (expected)"
             fi
           else
             echo "✓ No findings in source code"

@@ -147,6 +147,22 @@ func toolList() []map[string]any {
 				"categories": cats,
 			}),
 		},
+		{
+			"name":        "scan_env",
+			"description": "Scan the current process environment variables for pattern matches",
+			"inputSchema": schema([]string{}, map[string]any{
+				"categories": cats,
+			}),
+		},
+		{
+			"name":        "list_patterns",
+			"description": "List enabled and disabled pattern names",
+			"inputSchema": schema([]string{}, map[string]any{
+				"enabled":  map[string]any{"type": "boolean", "description": "list enabled patterns (default true)"},
+				"disabled": map[string]any{"type": "boolean", "description": "list disabled patterns (default false)"},
+				"category": map[string]any{"type": "string", "description": "filter by category"},
+			}),
+		},
 	}
 }
 
@@ -234,6 +250,50 @@ func handleCall(ctx context.Context, params json.RawMessage) (any, *rpcError) {
 			return nil, &rpcError{Code: -32603, Message: err.Error()}
 		}
 		return textResult(findings), nil
+
+	case "scan_env":
+		var args struct {
+			Categories []string `json:"categories"`
+		}
+		if err := json.Unmarshal(p.Arguments, &args); err != nil {
+			return nil, &rpcError{Code: -32602, Message: "invalid params"}
+		}
+		core.SetActiveCategories(args.Categories)
+		findings := core.ScanEnv(ctx)
+		return textResult(findings), nil
+
+	case "list_patterns":
+		var args struct {
+			Enabled  *bool  `json:"enabled"`
+			Disabled *bool  `json:"disabled"`
+			Category string `json:"category"`
+		}
+		if err := json.Unmarshal(p.Arguments, &args); err != nil {
+			return nil, &rpcError{Code: -32602, Message: "invalid params"}
+		}
+		listEnabled := args.Enabled == nil || *args.Enabled // default true
+		listDisabled := args.Disabled != nil && *args.Disabled
+		if args.Category != "" {
+			core.SetActiveCategories([]string{args.Category})
+		}
+		var lines []string
+		if listEnabled {
+			for _, n := range core.ListEnabledPatterns() {
+				lines = append(lines, n+" [enabled]")
+			}
+		}
+		if listDisabled {
+			for _, n := range core.ListDisabledPatterns() {
+				lines = append(lines, n+" [disabled]")
+			}
+		}
+		text := "no patterns"
+		if len(lines) > 0 {
+			text = strings.Join(lines, "\n")
+		}
+		return map[string]any{
+			"content": []map[string]any{{"type": "text", "text": text}},
+		}, nil
 
 	default:
 		return nil, &rpcError{Code: -32601, Message: "unknown tool: " + p.Name}

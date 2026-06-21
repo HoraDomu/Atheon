@@ -198,6 +198,10 @@ func ScanEnv(ctx context.Context) []Finding {
 // Splitting this out lets tests exercise the len(parts) != 2 branch
 // without having to mutate the real process environment.
 func scanEnv(ctx context.Context, envs []string) []Finding {
+	scannersMu.RLock()
+	scanners := activeScanners
+	scannersMu.RUnlock()
+
 	var findings []Finding
 	for _, env := range envs {
 		if err := ctx.Err(); err != nil {
@@ -208,7 +212,7 @@ func scanEnv(ctx context.Context, envs []string) []Finding {
 			continue
 		}
 		key, val := parts[0], parts[1]
-		for _, cs := range activeScanners {
+		for _, cs := range scanners {
 			if !cs.combined.MatchString(val) {
 				continue
 			}
@@ -237,6 +241,10 @@ func ScanString(ctx context.Context, content, source string) []Finding {
 }
 
 func scanLines(ctx context.Context, content, file string) []Finding {
+	scannersMu.RLock()
+	scanners := activeScanners
+	scannersMu.RUnlock()
+
 	var findings []Finding
 	lines := strings.Split(content, "\n")
 	for i, line := range lines {
@@ -246,7 +254,7 @@ func scanLines(ctx context.Context, content, file string) []Finding {
 		if strings.Contains(line, "atheon:ignore") {
 			continue
 		}
-		for _, cs := range activeScanners {
+		for _, cs := range scanners {
 			if !cs.combined.MatchString(line) {
 				continue
 			}

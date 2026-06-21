@@ -14,6 +14,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -42,7 +43,6 @@ func (p *bundlePattern) Name() string             { return p.name }
 func (p *bundlePattern) Category() string         { return p.category }
 func (p *bundlePattern) Matches(line string) bool { return p.enabled && p.re.MatchString(line) }
 func (p *bundlePattern) Enabled() bool            { return p.enabled }
-func (p *bundlePattern) SetEnabled(enabled bool)  { p.enabled = enabled }
 
 type categoryScanner struct {
 	combined *regexp.Regexp
@@ -53,6 +53,7 @@ var (
 	allPatterns          []*bundlePattern
 	activeScanners       []categoryScanner
 	activeCategoryFilter []string // nil = all categories; preserved across rebuildActiveScanners
+	scannersMu           sync.RWMutex
 )
 
 func init() {
@@ -140,6 +141,8 @@ func loadBundle(data []byte) error {
 // A nil or empty slice means "all categories." Calling this rebuilds the
 // internal pre-filter regexes used by ScanFile and ScanDir.
 func SetActiveCategories(cats []string) {
+	scannersMu.Lock()
+	defer scannersMu.Unlock()
 	activeCategoryFilter = cats
 
 	catSet := map[string]bool{}
@@ -170,7 +173,7 @@ func SetActiveCategories(cats []string) {
 	}
 
 	activeScanners = nil
-	for _, patterns := range byCategory {
+	for cat, patterns := range byCategory {
 		// Split bundle patterns (have a match regex) from external patterns (don't)
 		var bundlePs, extPs []Pattern
 		for _, p := range patterns {
@@ -186,7 +189,9 @@ func SetActiveCategories(cats []string) {
 				parts = append(parts, "(?:"+p.(*bundlePattern).match+")")
 			}
 			combined, err := regexp.Compile(strings.Join(parts, "|"))
-			if err == nil {
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "warning: skipping %d bundle pattern(s) in category %q: %v\n", len(bundlePs), cat, err)
+			} else {
 				activeScanners = append(activeScanners, categoryScanner{combined: combined, patterns: bundlePs})
 			}
 		}
