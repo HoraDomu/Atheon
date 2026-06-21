@@ -110,7 +110,7 @@ jobs:
           cache: true
 
       - name: Build Atheon
-        run: go build -o atheon ./cmd/mcp
+        run: go build -o atheon ./cmd/atheon
 
       - name: Scan codebase with Atheon
         run: |
@@ -178,7 +178,7 @@ jobs:
 
       - name: Build binaries
         run: |
-          go build -o atheon-${{ matrix.os }} ./cmd/mcp
+          go build -o atheon-${{ matrix.os }} ./cmd/atheon
           go build -o atheon-mcp-${{ matrix.os }} ./cmd/mcp
 
       - name: Test binaries
