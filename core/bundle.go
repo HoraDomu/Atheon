@@ -327,7 +327,7 @@ func ensureAtheonDir() (string, error) {
 		return "", err
 	}
 	dir := filepath.Join(home, ".atheon")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return "", err
 	}
 	return dir, nil

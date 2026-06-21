@@ -99,7 +99,7 @@ func Audit(ctx context.Context, root string) (*AuditReport, error) {
 
 // WriteReport writes audit results as both .json and .md files.
 func WriteReport(r *AuditReport, dir string) error {
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return fmt.Errorf("create audit dir: %w", err)
 	}
 

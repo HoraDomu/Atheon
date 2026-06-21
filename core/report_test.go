@@ -201,3 +201,158 @@ func TestRenderHTML_Structure(t *testing.T) {
 		t.Error("expected 'No secrets detected' in empty HTML")
 	}
 }
+
+// TestRedact_ShortStrings covers the len <= 8 branch in redact.
+func TestRedact_ShortStrings(t *testing.T) {
+	cases := []struct {
+		input    string
+		expected string
+	}{
+		{"", "***"},
+		{"abc", "***"},
+		{"12345678", "***"}, // exactly 8
+	}
+	for _, tc := range cases {
+		got := redact(tc.input)
+		if got != tc.expected {
+			t.Errorf("redact(%q): got %q, want %q", tc.input, got, tc.expected)
+		}
+	}
+}
+
+// TestFormatBytes_AllRanges covers all branches in formatBytes.
+func TestFormatBytes_AllRanges(t *testing.T) {
+	cases := []struct {
+		b        int64
+		expected string
+	}{
+		{0, "0 B"},
+		{512, "512 B"},
+		{1023, "1023 B"},
+		{1024, "1.0 KB"},
+		{1536, "1.5 KB"},
+		{1 << 20, "1.0 MB"},
+		{5 << 20, "5.0 MB"},
+		{10 << 20, "10.0 MB"},
+	}
+	for _, tc := range cases {
+		got := formatBytes(tc.b)
+		if got != tc.expected {
+			t.Errorf("formatBytes(%d): got %q, want %q", tc.b, got, tc.expected)
+		}
+	}
+}
+
+// TestRenderText_NoStats covers the branch where Stats.Files == 0.
+func TestRenderText_NoStats(t *testing.T) {
+	r := Report{
+		Version:  "test",
+		ScanType: "string",
+		Findings: []Finding{},
+		Stats:    Stats{Files: 0, Bytes: 0, ElapsedMs: 0},
+	}
+	out := Render(r, FormatText)
+	if strings.Contains(out, "file(s)") {
+		t.Errorf("expected no file count when Files=0: %s", out)
+	}
+	if !strings.Contains(out, "no findings") {
+		t.Errorf("expected 'no findings': %s", out)
+	}
+}
+
+// TestRenderText_MultipleFindings verifies multiple findings listed.
+func TestRenderText_MultipleFindings(t *testing.T) {
+	r := Report{
+		Version:  "test",
+		ScanType: "dir",
+		Findings: []Finding{
+			{Pattern: "aws-access-key", File: "a.txt", Line: 1, Content: "AKIAIOSFODNN7EXAMPLE"},
+			{Pattern: "openai-api-key", File: "b.txt", Line: 2, Content: "sk-abcdefghijklmnopqrstuvwxyz"},
+		},
+		Stats: Stats{Files: 10, Bytes: 2048, ElapsedMs: 15},
+	}
+	out := Render(r, FormatText)
+	if !strings.Contains(out, "2 finding(s)") {
+		t.Errorf("expected '2 finding(s)': %s", out)
+	}
+}
+
+// TestRenderHTML_Stats verifies the stats section in HTML.
+func TestRenderHTML_Stats(t *testing.T) {
+	r := Report{
+		Version:     "test",
+		GeneratedAt: time.Now(),
+		ScanType:    "dir",
+		Target:      "/src",
+		Findings:    []Finding{},
+		Stats:       Stats{Files: 42, Bytes: 123456, ElapsedMs: 99},
+	}
+	out := Render(r, FormatHTML)
+	for _, needle := range []string{"42", "99ms"} {
+		if !strings.Contains(out, needle) {
+			t.Errorf("expected %q in HTML: %s", needle, out)
+		}
+	}
+}
+
+// TestRenderSARIF_NoFindings covers empty findings in SARIF.
+func TestRenderSARIF_NoFindings(t *testing.T) {
+	r := Report{
+		Version:  "test",
+		ScanType: "string",
+		Findings: []Finding{},
+	}
+	out := Render(r, FormatSARIF)
+	var log sarifLog
+	if err := json.Unmarshal([]byte(out), &log); err != nil {
+		t.Fatalf("not valid JSON: %s", out)
+	}
+	if len(log.Runs[0].Results) != 0 {
+		t.Errorf("expected 0 results, got %d", len(log.Runs[0].Results))
+	}
+}
+
+// TestRenderSARIF_ThreeFindings verifies rule deduplication with three findings.
+func TestRenderSARIF_ThreeFindings(t *testing.T) {
+	r := Report{
+		Version:  "test",
+		ScanType: "dir",
+		Findings: []Finding{
+			{Pattern: "aws-access-key", File: "a.txt", Line: 1, Content: "key1"},
+			{Pattern: "aws-access-key", File: "b.txt", Line: 2, Content: "key2"},
+			{Pattern: "openai-api-key", File: "c.txt", Line: 3, Content: "key3"},
+		},
+	}
+	out := Render(r, FormatSARIF)
+	var log sarifLog
+	if err := json.Unmarshal([]byte(out), &log); err != nil {
+		t.Fatalf("not valid JSON: %s", out)
+	}
+	run := log.Runs[0]
+	if len(run.Tool.Driver.Rules) != 2 {
+		t.Errorf("expected 2 rules, got %d", len(run.Tool.Driver.Rules))
+	}
+	if len(run.Results) != 3 {
+		t.Errorf("expected 3 results, got %d", len(run.Results))
+	}
+}
+
+// TestRenderText_StatsFilesPositive covers the scanned-bytes branch.
+func TestRenderText_StatsFilesPositive(t *testing.T) {
+	r := Report{
+		Version:  "test",
+		ScanType: "dir",
+		Findings: []Finding{},
+		Stats:    Stats{Files: 3, Bytes: 2048, ElapsedMs: 7},
+	}
+	out := Render(r, FormatText)
+	if !strings.Contains(out, "3 file(s)") {
+		t.Errorf("expected file count in output: %s", out)
+	}
+	if !strings.Contains(out, "2.0 KB") {
+		t.Errorf("expected KB bytes in output: %s", out)
+	}
+	if !strings.Contains(out, "7ms") {
+		t.Errorf("expected ms in output: %s", out)
+	}
+}

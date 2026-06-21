@@ -50,7 +50,7 @@ func savePatternState(state *PatternState) error {
 	dir := filepath.Dir(path)
 
 	// Create directory if it doesn't exist
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return fmt.Errorf("failed to create state directory: %w", err)
 	}
 

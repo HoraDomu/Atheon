@@ -33,6 +33,7 @@ func TestScanURL(t *testing.T) {
 	}
 	if stats == nil {
 		t.Error("expected non-nil stats")
+		return
 	}
 	if stats.Files != 1 {
 		t.Errorf("files = %d, want 1", stats.Files)

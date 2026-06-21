@@ -497,3 +497,71 @@ func coreAll() []string {
 	_ = strings.Contains // keep strings import used
 	return []string{"aws-access-key", "openai-api-key"}
 }
+
+// TestExtractFormatFlagValid covers extractFormatFlag with valid format values.
+// Note: only json/sarif/html are stripped from args; text is the default
+// and the flag is left in place so downstream parsers see it unchanged.
+func TestExtractFormatFlagValid(t *testing.T) {
+	cases := []struct {
+		arg    string
+		format core.Format
+		strip  bool // whether flag should be stripped from args
+	}{
+		{"--format=json", core.FormatJSON, true},
+		{"--format=sarif", core.FormatSARIF, true},
+		{"--format=html", core.FormatHTML, true},
+		{"--format=text", core.FormatText, false}, // default; not stripped
+	}
+	for _, tc := range cases {
+		t.Run(tc.arg, func(t *testing.T) {
+			format, rest := extractFormatFlag([]string{tc.arg, "dir"})
+			if format != tc.format {
+				t.Errorf("got %v, want %v", format, tc.format)
+			}
+			if tc.strip {
+				if len(rest) != 1 || rest[0] != "dir" {
+					t.Errorf("expected [dir], got %v", rest)
+				}
+			}
+		})
+	}
+}
+
+// TestExtractFormatFlagUnknown covers extractFormatFlag with unknown values.
+func TestExtractFormatFlagUnknown(t *testing.T) {
+	format, rest := extractFormatFlag([]string{"--format=png", "dir"})
+	if format != core.FormatText {
+		t.Errorf("unknown format should return FormatText, got %v", format)
+	}
+	// Unknown format is not stripped from args
+	if len(rest) != 2 || rest[0] != "--format=png" || rest[1] != "dir" {
+		t.Errorf("expected unchanged args, got %v", rest)
+	}
+}
+
+// TestRunScanURLMissingArg exercises scan-url with no URL argument.
+func TestRunScanURLMissingArg(t *testing.T) {
+	if code := run(context.Background(), []string{"scan-url"}); code != 1 {
+		t.Errorf("expected exit 1, got %d", code)
+	}
+}
+
+// TestRunScanGitMissingArg exercises scan-git with no URL argument.
+func TestRunScanGitMissingArg(t *testing.T) {
+	if code := run(context.Background(), []string{"scan-git"}); code != 1 {
+		t.Errorf("expected exit 1, got %d", code)
+	}
+}
+
+// TestRunAudit exercises the audit command (may succeed or fail depending
+// on current code health, so we just verify it doesn't panic).
+func TestRunAudit(t *testing.T) {
+	code := run(context.Background(), []string{"audit"})
+	_ = code
+}
+
+// TestRunAuditWithPath exercises the audit command with an explicit root path.
+func TestRunAuditWithPath(t *testing.T) {
+	code := run(context.Background(), []string{"audit", "."})
+	_ = code
+}

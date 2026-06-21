@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -259,6 +260,87 @@ func TestMainExercisesToolsCall(t *testing.T) {
 	}
 	if result == nil {
 		t.Fatal("expected result")
+	}
+}
+
+// TestHandleCallScanURLBadArgs exercises the scan_url error path with bad args.
+func TestHandleCallScanURLBadArgs(t *testing.T) {
+	params := json.RawMessage(`{"name":"scan_url","arguments":{"url":123}}`)
+	_, rerr := handleCall(context.Background(), params)
+	if rerr == nil || rerr.Code != -32602 {
+		t.Errorf("expected invalid-params -32602, got %v", rerr)
+	}
+}
+
+// TestHandleCallScanGit exercises the scan_git tool via handleCall against a
+// freshly initialised local repository.
+func TestHandleCallScanGit(t *testing.T) {
+	// Create a temp directory with a git repo
+	repoDir := t.TempDir()
+	f, err := os.CreateTemp(repoDir, "secret-*.txt")
+	if err != nil {
+		t.Fatalf("CreateTemp: %v", err)
+	}
+	defer os.Remove(f.Name())
+	_, _ = f.WriteString("github_token=ghp_abcdefghijklmnopqrstuvwxyz123456\n")
+	f.Close()
+
+	// Init git
+	cmd := exec.Command("git", "init")
+	cmd.Dir = repoDir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Skipf("git init failed: %v\n%s", err, out)
+	}
+	cmd = exec.Command("git", "config", "user.email", "test@test.com")
+	cmd.Dir = repoDir
+	if _, err := cmd.CombinedOutput(); err != nil {
+		t.Skipf("git config failed: %v", err)
+	}
+	cmd = exec.Command("git", "config", "user.name", "Test")
+	cmd.Dir = repoDir
+	if _, err := cmd.CombinedOutput(); err != nil {
+		t.Skipf("git config failed: %v", err)
+	}
+	cmd = exec.Command("git", "add", ".")
+	cmd.Dir = repoDir
+	if _, err := cmd.CombinedOutput(); err != nil {
+		t.Skipf("git add failed: %v", err)
+	}
+	cmd = exec.Command("git", "commit", "-m", "initial")
+	cmd.Dir = repoDir
+	if _, err := cmd.CombinedOutput(); err != nil {
+		t.Skipf("git commit failed: %v", err)
+	}
+
+	params := json.RawMessage(`{"name":"scan_git","arguments":{"remote_url":"file://` + repoDir + `"}}`)
+	result, rerr := handleCall(context.Background(), params)
+	if rerr != nil {
+		t.Fatalf("unexpected error: %v", rerr)
+	}
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+}
+
+// TestHandleCallScanGitBadArgs exercises the scan_git error path with bad args.
+func TestHandleCallScanGitBadArgs(t *testing.T) {
+	params := json.RawMessage(`{"name":"scan_git","arguments":{"remote_url":123}}`)
+	_, rerr := handleCall(context.Background(), params)
+	if rerr == nil || rerr.Code != -32602 {
+		t.Errorf("expected invalid-params -32602, got %v", rerr)
+	}
+}
+
+// TestHandleCallScanGitInvalidRemote exercises the scan_git error path for an
+// unreachable or invalid remote URL.
+func TestHandleCallScanGitInvalidRemote(t *testing.T) {
+	params := json.RawMessage(`{"name":"scan_git","arguments":{"remote_url":"http://127.0.0.1:99999/nonexistent"}}`)
+	_, rerr := handleCall(context.Background(), params)
+	if rerr == nil {
+		t.Error("expected error for invalid remote")
+	}
+	if rerr != nil && rerr.Code != -32603 {
+		t.Errorf("expected internal error -32603, got %v", rerr)
 	}
 }
 
