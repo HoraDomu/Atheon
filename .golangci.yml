@@ -14,6 +14,9 @@ linters:
         - os.Unsetenv
         - os.Remove
         - os.RemoveAll
+        - (*gzip.Reader).Close
+        - (*os.File).Close
+        - (*http.Response).Body.Close
   enable:
     - errcheck
     - govet
