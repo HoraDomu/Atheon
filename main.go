@@ -22,12 +22,7 @@ func main() {
 		os.Exit(0)
 	}
 
-	jsonOutput := len(args) > 0 && args[0] == "--json"
-	if jsonOutput {
-		args = args[1:]
-	}
-
-	cats, args, enableAll := parseCategories(args)
+	cats, args, enableAll, jsonOutput := parseArgs(args)
 	if enableAll {
 		core.EnableAllPatterns()
 	}
@@ -153,6 +148,29 @@ func parseCategories(args []string) (cats []string, rest []string, enableAll boo
 	return
 }
 
+// parseArgs handles all global flags and returns categories, remaining args,
+// enableAll flag, and jsonOutput flag. It scans all args so flags work in any position.
+func parseArgs(args []string) (cats []string, rest []string, enableAll bool, jsonOutput bool) {
+	for _, a := range args {
+		switch {
+		case a == "--json":
+			jsonOutput = true
+		case strings.HasPrefix(a, "--categories="):
+			val := strings.TrimPrefix(a, "--categories=")
+			for _, c := range strings.Split(val, ",") {
+				if c = strings.TrimSpace(c); c != "" {
+					cats = append(cats, c)
+				}
+			}
+		case a == "--all":
+			enableAll = true
+		default:
+			rest = append(rest, a)
+		}
+	}
+	return
+}
+
 func printFindings(findings []core.Finding, stats *core.Stats, jsonOutput bool) {
 	if jsonOutput {
 		printJSONFindings(findings)
@@ -243,7 +261,7 @@ usage:
   atheon --file <path>                scan a single file explicitly
   atheon --env                        scan environment variables
   atheon - / --stdin                  scan from stdin
-  atheon --json <path>                print findings as JSON (must be first flag)
+  atheon --json <path>                print findings as JSON
   atheon --categories=<c1,c2> <path>  scan specific categories only
   atheon --all <path>                 scan all patterns including disabled ones
   atheon list                         list all patterns with enabled/disabled status
