@@ -6,17 +6,17 @@
 
 ![Go](https://img.shields.io/badge/Go-1.21%2B-00ADD8)
 ![License](https://img.shields.io/badge/license-MIT-green)
-![Patterns](https://img.shields.io/badge/patterns-225-blueviolet)
+![Patterns](https://img.shields.io/badge/patterns-255-blueviolet)
 ![Categories](https://img.shields.io/badge/categories-19-orange)
 ![CI](https://github.com/aliasfoxkde/Atheon-Enhanced/actions/workflows/comprehensive-ci.yml/badge.svg)
-![Coverage](https://img.shields.io/badge/coverage-95%25-brightgreen)
+![Coverage](https://img.shields.io/badge/coverage-97%25-brightgreen)
 ![Stars](https://img.shields.io/github/stars/aliasfoxkde/Atheon-Enhanced?style=social)
 
 > **One tool. All patterns. Any input.**
 
 # ⚠️ **IMPORTANT: This is an Enhanced Testing Fork**
 
-**This repository (aliasfoxkde/Atheon) is an enhanced testing fork of [HoraDomu/Atheon](https://github.com/HoraDomu/Atheon) and is NOT a competing project.**
+**This repository (aliasfoxkde/Atheon-Enhanced) is an enhanced testing fork of [HoraDomu/Atheon](https://github.com/HoraDomu/Atheon) and is NOT a competing project.**
 
 ## 🎯 **Project Philosophy & Relationship to Official Project**
 
@@ -33,7 +33,7 @@
 ### **Enhanced aliasfoxkde/Atheon (Atheon-Enhanced)** - Feature-Rich Testing Build
 - **Purpose**: Experimental "nightly build" testing the limits of pattern matching
 - **Focus**: Performance optimizations, advanced features, comprehensive pattern coverage
-- **Patterns**: 225 patterns across 19 categories (community-driven, comprehensive coverage)
+- **Patterns**: 255 patterns across 19 categories (community-driven, comprehensive coverage)
 - **Update cadence**: Frequent updates with latest features and enhancements
 - **Best for**: Power users, CI/CD integration, comprehensive security scanning
 
@@ -56,7 +56,7 @@
 <summary><b>📊 Enhanced Features vs Official Release</b></summary>
 
 ### **What's Enhanced in This Testing Build?**
-- **225 patterns** across 19 categories - comprehensive coverage
+- **255 patterns** across 19 categories - comprehensive coverage
 - **2-3x faster** with streaming API and performance optimizations
 - **10x less memory** usage with chunked file scanning
 - **MCP integration** with state persistence and category filtering
@@ -64,7 +64,7 @@
 - **Quality enforcement** patterns for AI/developer shortcuts
 - **Configuration profiles** for different use cases
 - **Comprehensive CI/CD** with multi-version testing
-- **~95% test coverage** on the core scanner
+- **~97% test coverage** on the core scanner
 
 ### **Trade-offs to Consider**
 - ✅ **More features** - Latest capabilities and experimental patterns
@@ -73,7 +73,7 @@
 - ⚠️ **May lag behind** - Official releases may have newer stable features
 - ✅ **More testing** - Comprehensive test suite and validation
 
-> **See detailed comparison**: [docs/FEATURE_COMPARISON.md](docs/FEATURE_COMPARISON.md)
+> **See detailed comparison**: [docs/reports/FEATURE_COMPARISON.md](docs/reports/FEATURE_COMPARISON.md)
 
 </details>
 
@@ -97,7 +97,7 @@
 ```bash
 # Clone the repository
 git clone https://github.com/aliasfoxkde/Atheon-Enhanced.git
-cd Atheon
+cd Atheon-Enhanced
 
 # Build the main binary
 go build -o atheon ./cmd/atheon
@@ -112,23 +112,6 @@ export PATH=$PATH:$(pwd)
 
 # Verify installation
 atheon --version
-```
-
-### **Alternative: Development Version**
-```bash
-# Clone and checkout development branch
-git clone https://github.com/aliasfoxkde/Atheon-Enhanced.git
-cd Atheon
-git checkout dev/full-feature
-
-# Build with all features enabled
-go build -o atheon ./cmd/atheon
-
-# Verify installation
-atheon --version
-```
-go build -o atheon ./cmd/atheon
-go build -o atheon-mcp ./cmd/mcp
 ```
 
 </details>
@@ -146,12 +129,6 @@ atheon --categories=secrets,pii ./my-project
 
 # Use configuration profile
 atheon --profile config/profiles/pipeline.json ./my-project
-
-# Scan a remote URL for secrets
-atheon scan-url https://example.com/config.json
-
-# Scan a remote git repository
-atheon scan-git https://github.com/user/repo
 
 # List all patterns with status
 atheon list
@@ -216,18 +193,9 @@ atheon --all ./test-project
 # JSON output for automation
 atheon --json ./my-project > findings.json
 
-# SARIF output for GitHub Code Scanning
-atheon --format=sarif ./my-project > atheon-results.sarif
-
-# HTML report (self-contained, no external dependencies)
-atheon --format=html ./my-project > findings.html
-
 # Scan from stdin
 cat file.txt | atheon -
 git diff | atheon -
-
-# Run the audit pipeline and produce a structured report
-atheon audit
 ```
 
 </details>
@@ -235,12 +203,42 @@ atheon audit
 <details>
 <summary><b>🔧 Pre-commit Hook Setup</b></summary>
 
+Atheon integrates cleanly as a Git pre-commit hook to block secrets and quality
+issues before they reach version control.
+
 ```bash
-# Create pre-commit hook
-echo '#!/bin/sh
-atheon ./' > .git/hooks/pre-commit
+# Create the hook file
+cat > .git/hooks/pre-commit << 'EOF'
+#!/bin/sh
+# Atheon pre-commit: scan staged files for secrets and quality issues
+set -e
+
+# Collect staged files (excluding deleted)
+STAGED=$(git diff --cached --name-only --diff-filter=d)
+if [ -z "$STAGED" ]; then
+  exit 0
+fi
+
+# Write staged content to a temp dir and scan it
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT
+
+for f in $STAGED; do
+  mkdir -p "$TMP/$(dirname "$f")"
+  git show ":$f" > "$TMP/$f"
+done
+
+atheon "$TMP"
+EOF
+
 chmod +x .git/hooks/pre-commit
 ```
+
+> [!TIP]
+> Use `--categories=secrets,pii` to limit scanning to high-severity patterns only in the hook for faster commits.
+
+> [!NOTE]
+> For team-wide enforcement, add the hook to a `scripts/` directory and document setup in your project's CONTRIBUTING guide. Tools like [pre-commit](https://pre-commit.com) can automate hook installation across the team.
 
 </details>
 
@@ -293,7 +291,7 @@ chmod +x .git/hooks/pre-commit
 ### **Supporting Infrastructure**
 - **[Portfolio](https://openportfolio.pages.dev)** - Project maintainer's portfolio
 - **[Documentation](docs/)** - Comprehensive documentation
-- **[GitHub Wiki](.github/wiki/)** - Community guides and tutorials
+- **[GitHub Wiki](https://github.com/aliasfoxkde/Atheon-Enhanced/wiki)** - Community guides and tutorials
 
 </details>
 
@@ -305,9 +303,9 @@ chmod +x .git/hooks/pre-commit
 <summary><b>📖 Core Documentation</b></summary>
 
 ### **System Architecture & Workflow**
-- **[docs/SYSTEM_ARCHITECTURE.md](docs/SYSTEM_ARCHITECTURE.md)** - Complete system architecture and workflow
+- **[docs/architecture/SYSTEM_ARCHITECTURE.md](docs/architecture/SYSTEM_ARCHITECTURE.md)** - Complete system architecture and workflow
 - **[docs/BRANCH_STRATEGY.md](docs/BRANCH_STRATEGY.md)** - Branch structure and development workflow
-- **[docs/FEATURE_COMPARISON.md](docs/FEATURE_COMPARISON.md)** - Upstream vs enhanced feature comparison
+- **[docs/reports/FEATURE_COMPARISON.md](docs/reports/FEATURE_COMPARISON.md)** - Upstream vs enhanced feature comparison
 - **[docs/ROADMAP.md](docs/ROADMAP.md)** - Development roadmap and milestones
 
 ### **Key Documentation Files**
@@ -400,7 +398,7 @@ atheon --profile config/profiles/pipeline.json ./my-project
 - ✅ **Performance Benchmarks**: Track improvements over time
 
 ### **Expanded Pattern Library**
-- ✅ **225 patterns** across 19 categories
+- ✅ **255 patterns** across 19 categories
 - ✅ **New categories**: Accessibility, Performance, Web Development, API Integration, Security Hardening, Cloud-Native, PWA, Data Visualization
 - ✅ **Enhanced coverage**: Modern web development, security best practices, performance optimization
 - ✅ **AI Detection Patterns**: AI-generated code identification, template detection, safety bypasses
@@ -452,7 +450,7 @@ atheon --profile config/profiles/pipeline.json ./my-project
 
 | Feature | Official HoraDomu/Atheon | Enhanced aliasfoxkde/Atheon |
 |---------|----------------------|---------------------------|
-| Pattern Count | 57 | 179 |
+| Pattern Count | 57 | 255 |
 | Categories | 5 | 19 |
 | Memory Usage | Full file loading | Chunked streaming (10x reduction) |
 | Performance | Baseline | 2-3x faster |
@@ -468,14 +466,14 @@ atheon --profile config/profiles/pipeline.json ./my-project
 | Sentinel Errors | ❌ | ✅ |
 | Godoc Comments | Partial | ✅ Comprehensive |
 | golangci-lint | ❌ | ✅ 18 linters in CI |
-| Test Coverage | — | 98% (core), 100% (cmd/atheon) |
+| Test Coverage | — | 97%+ (core, cmd/atheon) |
 | Benchmarks | ❌ | ✅ In-tree |
 | Examples | ❌ | ✅ Runnable godoc examples |
 | Stability | Production-ready | Testing/Experimental |
 | Update Frequency | Scheduled releases | Frequent updates |
 | Feature Parity | N/A (upstream) | Maintained via PRs |
 
-> **📖 See detailed comparison**: [docs/FEATURE_COMPARISON.md](docs/FEATURE_COMPARISON.md)
+> **📖 See detailed comparison**: [docs/reports/FEATURE_COMPARISON.md](docs/reports/FEATURE_COMPARISON.md)
 
 </details>
 
@@ -496,13 +494,13 @@ atheon --profile config/profiles/pipeline.json ./my-project
 - ✅ Runnable godoc examples for every public API
 
 ### **Quality Metrics**
-- **Test Coverage**: 98% core, 100% cmd/atheon, 92% cmd/mcp, 97% bundler
+- **Test Coverage**: 97%+ across core, cmd/atheon, and bundler packages
 - **CI/CD Pass Rate**: >95%
-- **Pattern Validation**: All 225 patterns tested and functional
+- **Pattern Validation**: All 255 patterns tested and functional
 - **Pattern Coverage**: 19 categories with modern development support
 - **Lint Warnings**: 0 (golangci-lint clean)
 
-**📖 Detailed Documentation**: See [PATTERN_CATEGORIES.md](docs/PATTERN_CATEGORIES.md) for comprehensive pattern documentation
+**📖 Detailed Documentation**: See [docs/architecture/PATTERN_CATEGORIES.md](docs/architecture/PATTERN_CATEGORIES.md) for comprehensive pattern documentation
 
 </details>
 
@@ -540,7 +538,6 @@ atheon . --pattern ai-safety-bypass
 ### **Branch Structure**
 - **`stable/clean`** - Tracks upstream HoraDomu/Atheon:main (source of truth)
 - **`main`** - Production build with enhanced features (user-facing)
-- **`dev/full-feature`** - Development branch with all patterns enabled (testing)
 
 ### **Development Workflow**
 ```bash
@@ -570,14 +567,8 @@ gh pr create --base main --head feat/my-feature
 ### **`main` Branch** (Production Build)
 - **Purpose**: Production-ready with all enhancements
 - **Usage**: User-facing installation, production deployment
-- **Patterns**: 225 patterns across 19 categories
+- **Patterns**: 255 patterns across 19 categories
 - **Installation**: `go install github.com/aliasfoxkde/Atheon-Enhanced@latest`
-
-### **`dev/full-feature` Branch** (Development/Testing)
-- **Purpose**: Comprehensive testing with all patterns enabled
-- **Usage**: Pattern development, performance validation, quality assurance
-- **Patterns**: All 225 patterns enabled, full testing active
-- **Installation**: `go install github.com/aliasfoxkde/Atheon-Enhanced@dev/full-feature`
 
 </details>
 
@@ -613,7 +604,7 @@ The folder name becomes the category. No engine changes, no recompile needed.
 - **[Upstream Contributors](docs/CONTRIBUTORS.md)** - Contributors to the official project
 - **[Enhanced Contributors](https://github.com/aliasfoxkde/Atheon-Enhanced/graphs/contributors)** - Contributors to this enhanced version
 
-> **📖 See detailed system architecture**: [docs/SYSTEM_ARCHITECTURE.md](docs/SYSTEM_ARCHITECTURE.md)
+> **📖 See detailed system architecture**: [docs/architecture/SYSTEM_ARCHITECTURE.md](docs/architecture/SYSTEM_ARCHITECTURE.md)
 
 </details>
 
@@ -680,14 +671,14 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - ✅ MCP integration with advanced features
 
 ### **Use Enhanced aliasfoxkde/Atheon (Atheon-Enhanced) when you want**:
-- ✅ 225 patterns across 19 categories (comprehensive coverage)
+- ✅ 255 patterns across 19 categories (comprehensive coverage)
 - ✅ 2-3x performance improvements
 - ✅ 10x memory reduction for large files
 - ✅ MCP integration with advanced features
 - ✅ Pattern state persistence
 - ✅ Quality enforcement patterns
 - ✅ Configuration profiles for different use cases
-- ✅ Comprehensive testing (98% coverage) and validation
+- ✅ Comprehensive testing (97%+ coverage) and validation
 - ✅ Context cancellation across all scan APIs
 - ✅ Static-analysis clean (golangci-lint v1.64.8)
 - ✅ Runnable godoc examples
@@ -702,8 +693,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 |----------|------|---------|
 | **Official Project** | [https://github.com/HoraDomu/Atheon](https://github.com/HoraDomu/Atheon) | Stable production release |
 | **Enhanced Version** | [https://github.com/aliasfoxkde/Atheon-Enhanced](https://github.com/aliasfoxkde/Atheon-Enhanced) | Feature-rich testing build |
-| **Feature Comparison** | [docs/FEATURE_COMPARISON.md](docs/FEATURE_COMPARISON.md) | Detailed feature comparison |
-| **System Architecture** | [docs/SYSTEM_ARCHITECTURE.md](docs/SYSTEM_ARCHITECTURE.md) | Technical architecture |
+| **Feature Comparison** | [docs/reports/FEATURE_COMPARISON.md](docs/reports/FEATURE_COMPARISON.md) | Detailed feature comparison |
+| **System Architecture** | [docs/architecture/SYSTEM_ARCHITECTURE.md](docs/architecture/SYSTEM_ARCHITECTURE.md) | Technical architecture |
 | **Branch Strategy** | [docs/BRANCH_STRATEGY.md](docs/BRANCH_STRATEGY.md) | Development workflow |
 | **Project Pulse** | [https://github.com/aliasfoxkde/Atheon-Enhanced/pulse](https://github.com/aliasfoxkde/Atheon-Enhanced/pulse) | Activity overview |
 | **Contributors** | [https://github.com/aliasfoxkde/Atheon-Enhanced/graphs/contributors](https://github.com/aliasfoxkde/Atheon-Enhanced/graphs/contributors) | Project contributors |
