@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -180,6 +182,8 @@ func TestBundleWhitespaceName(t *testing.T) {
 	_, err := bundle(community, out)
 	if err == nil {
 		t.Error("expected error for whitespace in pattern name, got nil")
+	} else if !strings.Contains(err.Error(), "must not contain whitespace") {
+		t.Errorf("expected 'must not contain whitespace' in error, got: %v", err)
 	}
 }
 
@@ -193,6 +197,8 @@ func TestBundleDuplicatePatternName(t *testing.T) {
 	_, err := bundle(community, out)
 	if err == nil {
 		t.Error("expected error for duplicate pattern name, got nil")
+	} else if !strings.Contains(err.Error(), "duplicate pattern name") {
+		t.Errorf("expected 'duplicate pattern name' in error, got: %v", err)
 	}
 }
 
@@ -205,5 +211,51 @@ func TestBundleInvalidRegex(t *testing.T) {
 	_, err := bundle(community, out)
 	if err == nil {
 		t.Error("expected error for invalid regex, got nil")
+	} else if !strings.Contains(err.Error(), "invalid regex") {
+		t.Errorf("expected 'invalid regex' in error, got: %v", err)
+	}
+}
+
+// TestBundleToWriterGzipFailure exercises the writeGzipped error path in bundleToWriter.
+type failWriter struct{}
+
+func (failWriter) Write([]byte) (int, error) { return 0, errWriteFail }
+
+var errWriteFail = errors.New("write failed")
+
+func TestBundleToWriterGzipFailure(t *testing.T) {
+	community := setupCommunity(t, map[string]string{
+		"secrets/key.yaml": "name: test-key\nmatch: 'AKIAIOSFODNN7EXAMPLE'\n",
+	})
+
+	_, err := bundleToWriter(community, failWriter{})
+	if err == nil {
+		t.Error("expected error from failing writer, got nil")
+	} else if !errors.Is(err, errWriteFail) {
+		t.Errorf("expected errWriteFail sentinel, got: %v", err)
+	}
+}
+
+// TestWalkPatternsWhitespaceName exercises the whitespace-in-name validation.
+func TestWalkPatternsWhitespaceName(t *testing.T) {
+	community := setupCommunity(t, map[string]string{
+		"secrets/bad.yaml": "name: 'bad name'\nmatch: 'foo'\n",
+	})
+
+	_, err := walkPatterns(community)
+	if err == nil {
+		t.Error("expected error for pattern name with whitespace, got nil")
+	}
+}
+
+// TestWalkPatternsMissingName exercises the missing-name-or-match validation.
+func TestWalkPatternsMissingFields(t *testing.T) {
+	community := setupCommunity(t, map[string]string{
+		"secrets/empty.yaml": "name: ''\nmatch: 'foo'\n",
+	})
+
+	_, err := walkPatterns(community)
+	if err == nil {
+		t.Error("expected error for missing name, got nil")
 	}
 }

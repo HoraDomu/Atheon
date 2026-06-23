@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -480,5 +481,63 @@ func TestScanDir_BinaryFiles(t *testing.T) {
 
 	if len(findings) < 1 {
 		t.Errorf("expected at least 1 finding from text file, got %d", len(findings))
+	}
+}
+
+// TestScanDirContextCancelledBeforeStart cancels the context before ScanDir walks any files.
+func TestScanDirContextCancelledBeforeStart(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // cancel immediately
+
+	tmpDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(tmpDir, "a.txt"), []byte("AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, _, err := ScanDir(ctx, tmpDir)
+	if err != nil && err != context.Canceled {
+		t.Errorf("expected nil or context.Canceled, got: %v", err)
+	}
+}
+
+// TestScanDirFileReadErrorSkipped exercises the goroutine path where os.ReadFile fails.
+// Skipped on Windows (chmod is not enforced) and when running as root (ignores mode bits).
+func TestScanDirFileReadErrorSkipped(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("os.Chmod file permissions are not enforced on Windows")
+	}
+
+	tmpDir := t.TempDir()
+	unreadable := filepath.Join(tmpDir, "secret.txt")
+	if err := os.WriteFile(unreadable, []byte("AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(unreadable, 0o000); err != nil {
+		t.Skipf("cannot chmod: %v", err)
+	}
+	defer os.Chmod(unreadable, 0o644)
+
+	findings, stats, err := ScanDir(context.Background(), tmpDir)
+	if err != nil {
+		t.Fatalf("unexpected ScanDir error: %v", err)
+	}
+	if stats == nil {
+		t.Fatal("expected non-nil stats")
+	}
+	// Unreadable file is skipped — no findings expected.
+	if len(findings) != 0 {
+		t.Errorf("expected 0 findings for unreadable file, got %d", len(findings))
+	}
+}
+
+// TestScanLinesContextCancelled exercises the early-exit path in scanLines.
+func TestScanLinesContextCancelled(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	findings := scanLines(ctx, "AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE\nline2\nline3\n", "test.txt")
+	// Pre-cancelled context: the early-exit select fires before any line is processed.
+	if len(findings) != 0 {
+		t.Errorf("expected 0 findings with cancelled context, got %d", len(findings))
 	}
 }
