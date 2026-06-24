@@ -55,7 +55,7 @@ Maintain an enhanced version of Atheon that provides production-ready features w
 
 2. Development & Testing
    ├─ Implementation
-   ├─ Local testing (go test ./...)
+   ├─ Local testing (go test ./... -p 1)
    ├─ Pattern validation (atheon list --all)
    └─ Documentation updates
 
@@ -208,7 +208,17 @@ docs/
 ├── CONFIGURATION_GUIDE.md (profile usage)
 ├── BRANCH_STRATEGY.md (branch documentation)
 ├── TESTING_GUIDE.md (testing procedures)
-└── CHANGELOG.md (version history)
+├── CHANGELOG.md (version history)
+├── ANALYSIS_REPORT.md (audit findings, 2026-06-23)
+├── PLAN.md / TASKS.md / PROGRESS.md (sprint tracking)
+├── architecture/
+│   ├── PATTERN_CATEGORIES.md
+│   ├── SYSTEM_ARCHITECTURE.md
+│   └── decisions/             ← ADRs (Architecture Decision Records)
+│       ├── 0001-pattern-yaml-format.md
+│       ├── 0002-ci-workflow-consolidation.md
+│       └── 0003-mcp-server-design.md
+└── reports/                   ← historical planning + per-feature deep dives
 ```
 
 ### **Code Organization**
@@ -254,7 +264,8 @@ community/               (Pattern contributions)
 
 ### **CI/CD Failures**
 - **Debug**: Check logs for specific failure points
-- **Local Validation**: Run `go test ./...` and `go vet ./...` locally
+- **Local Validation**: Run `go test ./... -p 1` and `go vet ./...` locally
+  (the `-p 1` flag is required — `core` has package-level state in `init()`)
 - **Pattern Issues**: Validate patterns with `atheon list --all`
 
 ### **Performance Regressions**
