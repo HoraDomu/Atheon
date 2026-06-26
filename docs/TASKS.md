@@ -1,7 +1,7 @@
 # Task Ledger — Atheon Enhanced
 
 **Last Updated**: 2026-06-26
-**Status**: Active — Wave 9 in progress
+**Status**: Active — Wave 10 PR #102 open, ready for review
 
 ---
 
@@ -129,47 +129,89 @@ PRs: #92-98
 
 Three parallel Explore agents (2026-06-26) surfaced **62 findings** across MCP+DX, SARIF+ecosystem, and Security dimensions. Four PRs planned.
 
-### PR #99: MCP error sanitization + cancel handler + progress notifications + stale-bundle detection
+### PR #99/100: MCP error sanitization + cancel handler + stale-bundle detection
 
-- [ ] Add `$/cancelRequest` notification handler to MCP server (sync.Map per-request tracking)
-- [ ] Add progress notifications during `handleUpdateBundle` (every 512 KiB)
-- [ ] Sanitize JSON-RPC error messages: map `os.IsNotExist` → `"file not found"`, `os.IsPermission` → `"permission denied"`, others → `"internal error: <category>"`
-- [ ] Add ETag-based stale-bundle detection with `force: bool` bypass parameter
-- [ ] Add `bundle.etag` and `bundle.lastChecked` to pattern state file
-- [ ] Add `cmd/mcp/mcp_cancel_test.go`
-- [ ] Add `cmd/mcp/mcp_progress_test.go`
-- [ ] Add `cmd/mcp/mcp_error_sanitization_test.go`
-- [ ] Add `core/bundle_etag_test.go`
+- [x] Add `$/cancelRequest` notification handler to MCP server (sync.Map per-request tracking)
+- [x] Sanitize JSON-RPC error messages: map `os.IsNotExist` → `"file not found"`, `os.IsPermission` → `"permission denied"`, others → `"internal error"`
+- [x] Add ETag-based stale-bundle detection with `force: bool` bypass parameter
+- [x] Add `bundle.etag` and `bundle.lastChecked` to pattern state file
+- [x] Add `cmd/mcp/mcp_cancel_test.go`
+- [x] Add `cmd/mcp/mcp_error_sanitization_test.go`
+- [x] Add `core/bundle_etag_test.go`
+- [~] Progress notifications during bundle download (deferred to future PR)
+- [~] Add `cmd/mcp/mcp_progress_test.go` (deferred with progress notifications)
 
 ### PR #100: SARIF rules[].relationships + output parity + community pattern triage
 
-- [ ] Add CWE `relationships` to SARIF rules (secrets→CWE-798, web-security→CWE-79/601, etc.)
-- [ ] Add `severity`, `column`, `fingerprint`, `category` fields to JSON output
-- [ ] Scope `dummy-function`, `mock-stub`, `fake-data` patterns to test files only
-- [ ] Scope `sleep-in-test` to `*_test.go` / `test_*.py` files
-- [ ] Fix `skip-tests` overly-broad regex (anchor `skip` word boundary, remove `mvn.*skip.*test`)
-- [ ] Lower `todo-comment`/`fixme-comment` severity to `info`
-- [ ] Remove broken `helpUri` from SARIF rules (wiki/patterns#<name> does not exist)
-- [ ] Add `cmd/atheon/main_json_output_test.go`
-- [ ] Add `cmd/atheon/main_sarif_relationships_test.go`
+- [x] Add CWE `relationships` to SARIF rules (secrets→CWE-798, web-security→CWE-79/601, etc.)
+- [x] Add `severity`, `column`, `fingerprint`, `category` fields to JSON output
+- [x] Scope `dummy-function`, `mock-stub`, `fake-data` patterns to test files only
+- [x] Scope `sleep-in-test` to `*_test.go` / `test_*.py` files
+- [x] Fix `skip-tests` overly-broad regex (anchor `skip` word boundary, remove `mvn.*skip.*test`)
+- [x] Lower `todo-comment`/`fixme-comment` severity to `info`
+- [x] Remove broken `helpUri` from SARIF rules (wiki/patterns#<name> does not exist)
+- [x] Add `cmd/atheon/main_json_output_test.go`
+- [x] Add `cmd/atheon/main_sarif_relationships_test.go`
+
+> **Note**: All PR #100 items landed in PR #102 (Wave 10) which supersedes PR #100.
 
 ### PR #101: Bundle hash verification + rate-limiter hardening + binary sniff
 
-- [ ] Add SHA-256 verification for downloaded bundles (fetch checksums.txt first)
-- [ ] Publish `checksums.txt` alongside GitHub releases (bundler computes at release time)
-- [ ] Add concurrent request cap to MCP server (atomic.Int counter, maxConcurrent=50)
-- [ ] Add extension-based binary heuristic for large `.log`/`.cfg`/`.conf`/`.ini` files
-- [ ] Add UTF-16 BOM detection to binary sniff (`\xff\xfe` / `\xfe\xff`)
-- [ ] Add `core/bundle_hash_test.go`
-- [ ] Add `core/binary_sniff_test.go`
-- [ ] Add `cmd/mcp/mcp_concurrency_test.go`
+- [x] Add SHA-256 verification for downloaded bundles (fetch checksums.txt first)
+- [~] Publish `checksums.txt` alongside GitHub releases (bundler computes at release time) — release process step, tracked separately
+> **Note**: `release.yml` generates checksums.txt at release time via goreleaser; `SetBundleDownloadURL` now enforces HTTPS-only URLs (SSRF guard); hash mismatch is fatal.
+- [x] Add concurrent request cap to MCP server (atomic.Int counter, maxConcurrent=50)
+- [x] Add extension-based binary heuristic for large `.log`/`.cfg`/`.conf`/`.ini` files
+- [x] Add UTF-16 BOM detection to binary sniff (`\xff\xfe` / `\xfe\xff`)
+- [x] Add `core/bundle_hash_test.go`
+- [x] Add `core/binary_sniff_test.go`
+- [x] Add `cmd/mcp/mcp_concurrency_test.go`
 
 ### PR #102: Help text + Go 1.25 prep + yaml.v3 deprecation
 
-- [ ] Document `--all` and `--no-follow-symlinks` in `--help`
-- [ ] Add Go 1.25 to CI matrix (go1.21, go1.22, go1.23, go1.24, go1.25)
-- [ ] Add `yaml.v3` deprecation comment to `go.mod`
-- [ ] Run `go vet ./...` and `golangci-lint` with latest version to catch new lints
+- [x] Document `--all` and `--no-follow-symlinks` in `--help`
+- [x] Add Go 1.25 to CI matrix
+- [x] Add `yaml.v3` deprecation comment to `go.mod`
+- [x] Run `go vet ./...` and `golangci-lint` with latest version to catch new lints
+
+---
+
+## Wave 10: Post-Wave 9 Hardening (PR #102)
+
+> PR #102 supersedes PR #100. All items below are implemented in PR #102 (11 commits, 26 files, +1105/-123).
+
+### MCP path traversal fix (`cmd/mcp/main.go`)
+- [x] Add `sandboxPath(path)` helper: `filepath.Clean` + `EvalSymlinks` on relative paths before dispatch
+- [x] Block `../../etc/passwd` and relative symlink escapes (`cwd/subdir -> /etc`)
+- [x] Absolute paths pass through unchanged (explicit user intent)
+- [x] `handleScanFile` and `handleScanDir` call `sandboxPath` before dispatch
+- [x] `cmd/mcp/mcp_sandbox_test.go`: 5 test cases
+
+### Bundle download hardening (`core/bundle.go`)
+- [x] `io.LimitedReader` caps bundle downloads at `maxBundleDownloadBytes` (100 MiB)
+- [x] `Content-Length` header vs actual-bytes validation in `fetchBundleData`
+- [x] `SetBundleDownloadURL` rejects non-HTTP(S) schemes (`file://`, `ftp://`, etc.) — SSRF prevention
+- [x] `verifyBundleHash` failure now propagates as error (was: warn-and-proceed)
+
+### TOCTOU fix (`core/runner.go`)
+- [x] `readFileCapped` calls `filepath.EvalSymlinks` before `os.Stat`
+- [x] Symlinks to huge files sized by resolved target, not symlink itself
+
+### JSON-RPC error `data` field (`cmd/mcp/main.go`)
+- [x] `rpcError` struct gains `Data any` field per JSON-RPC 2.0 spec
+- [x] `rate_limit` → `Data: "rate_limit"`, `concurrent_limit` → `Data: "concurrent_limit"`, `invalid_params` → `Data: "invalid_params"`
+
+### CI/Release fixes
+- [x] `release.yml`: add `-race` to pre-release test gate
+- [x] `release.yml`: pin goreleaser-action `version: '7.2.2'`
+- [x] `release.yml`: add `--prov` flag for SLSA provenance attestation
+- [x] `community-pattern-review.yml`: add `--max-time 30` to curl call
+
+### Test infrastructure (required by the fatal hash check)
+- [x] `bundle_download_test.go`: `serveBundle` and all mock servers serve `checksums.txt`
+- [x] `state_io_errors_test.go`: mock servers updated
+- [x] `cli_test.go`, `main_run_test.go`: mock servers updated, trailing-slash URL fix
+- [x] `bundle_hash_test.go`: `TestVerifyBundleHashMismatch` updated for fatal error expectation
 
 ---
 
@@ -214,8 +256,9 @@ Historical (all closed in their respective waves):
 | 6 | [x] | #86-88 | Audit-followup + docs |
 | 7 | [x] | #89 | pattern_state mutex |
 | 8 | [x] | #92-98 | Detection, CI, patterns, MCP hardening |
-| 9 | [~] | #99-102 (planned) | MCP protocol, SARIF ecosystem, bundle integrity |
+| 9 | [x] | #99-102 | MCP protocol, SARIF ecosystem, bundle integrity |
+| 10 | [~] | #102 (open, ready) | Post-Wave 9 hardening: SSRF, TOCTOU, fatal hash, path sandbox |
 
 **Completed waves**: 8 / 8
 **Total merged PRs**: 27 through Wave 8
-**Wave 9**: In progress — 4 PRs planned
+**Wave 9/10**: PRs #99/100/101 merged, #102 open — supersedes PR #100

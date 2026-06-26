@@ -56,6 +56,24 @@ func configureLogging() {
 	slog.SetDefault(slog.New(handler))
 }
 
+// safeError maps low-level OS errors to user-safe messages so that absolute
+// filesystem paths, internal network addresses, and implementation details
+// are never leaked to stdout/stderr.  This mirrors the contract used by the
+// MCP server's safeError helper.
+func safeError(err error) string {
+	if err == nil {
+		return "unknown error"
+	}
+	switch {
+	case os.IsNotExist(err):
+		return "file not found"
+	case os.IsPermission(err):
+		return "permission denied"
+	default:
+		return "internal error"
+	}
+}
+
 // run executes the CLI with the given args and returns the exit code.
 // This is separated from main() so tests can call it without os.Exit
 // terminating the test process.
@@ -160,7 +178,7 @@ func run(ctx context.Context, args []string) int {
 		}
 		findings, stats, err := core.ScanFile(ctx, args[1])
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "error:", err)
+			fmt.Fprintln(os.Stderr, "error:", safeError(err))
 			return 1
 		}
 		printFindings(findings, stats, jsonOutput, sarifOutput)
@@ -173,7 +191,7 @@ func run(ctx context.Context, args []string) int {
 		path := args[0]
 		info, err := os.Stat(path)
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "error: path not found:", path)
+			fmt.Fprintf(os.Stderr, "error: %s: %s\n", safeError(err), path)
 			return 1
 		}
 		var findings []core.Finding
@@ -184,7 +202,7 @@ func run(ctx context.Context, args []string) int {
 			findings, stats, err = core.ScanFile(ctx, path)
 		}
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "error:", err)
+			fmt.Fprintln(os.Stderr, "error:", safeError(err))
 			return 1
 		}
 		printFindings(findings, stats, jsonOutput, sarifOutput)
@@ -265,7 +283,7 @@ func printFindings(findings []core.Finding, stats *core.Stats, jsonOutput, sarif
 	if !jsonOutput && !sarifOutput && stats != nil && len(stats.Errors) > 0 {
 		fmt.Fprintf(os.Stderr, "\n%d file(s) could not be read:\n", len(stats.Errors))
 		for _, e := range stats.Errors {
-			fmt.Fprintf(os.Stderr, "  %v\n", e)
+			fmt.Fprintf(os.Stderr, "  %s\n", safeError(e))
 		}
 	}
 }
@@ -281,7 +299,16 @@ func scanErrorsPresent(stats *core.Stats) bool {
 func printJSONFindings(findings []core.Finding) {
 	items := make([]map[string]any, 0, len(findings))
 	for _, f := range findings {
-		items = append(items, map[string]any{"pattern": f.Pattern, "file": f.File, "line": f.Line, "match": redact(f.Content)})
+		items = append(items, map[string]any{
+			"pattern":     f.Pattern,
+			"file":        f.File,
+			"line":        f.Line,
+			"column":      f.Column,
+			"match":       redact(f.Content),
+			"severity":    f.Severity,
+			"category":    f.Category,
+			"fingerprint": f.Fingerprint,
+		})
 	}
 	if err := json.NewEncoder(os.Stdout).Encode(items); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
@@ -349,6 +376,49 @@ func sarifSeverityScore(sev string) string {
 	}
 }
 
+// categoryCWE maps pattern categories to CWE IDs for SARIF relationships.
+// CWE IDs here follow the SARIF 2.1.0 relationships spec: each relationship
+// is {target: {id: <CWE>, index: -1, toolComponent: {name: "CWE"}}, kinds: ["relevant"]}.
+var categoryCWE = map[string]string{
+	"secrets":            "CWE-798", // Use of Hard-coded Credentials
+	"web-security":       "CWE-79",  // Cross-site Scripting (XSS)
+	"security-hardening": "CWE-269", // Improper Privilege Management
+	"compliance":         "CWE-732", // Incorrect Permission Assignment for Critical Resource
+	"pii":                "CWE-359", // Exposure of Private Personal Information to an Unauthorized Actor
+}
+
+// ruleCWE maps individual pattern names to their canonical CWE IDs, overriding
+// the category default when a more specific CWE applies.
+var ruleCWE = map[string]string{
+	"generic-api-key":             "CWE-312",  // Cleartext Storage of Sensitive Information
+	"github-actions-secret":       "CWE-798",  // Hard-coded Credentials
+	"hardcoded-password":          "CWE-259",  // Use of Hard-coded Password
+	"sql-string-concat":           "CWE-89",   // SQL Injection
+	"python-sql-injection":        "CWE-89",   // SQL Injection
+	"python-sql-format-injection": "CWE-89",   // SQL Injection
+	"js-sql-template-literal":     "CWE-89",   // SQL Injection
+	"dom-based-xss":               "CWE-79",   // Cross-site Scripting
+	"prototype-pollution":         "CWE-1321", // Prototype Pollution
+	"path-traversal":              "CWE-22",   // Path Traversal
+	"python-command-injection":    "CWE-78",   // OS Command Injection
+	"insecure-deserialization":    "CWE-502",  // Deserialization of Untrusted Data
+	"session-fixation":            "CWE-384",  // Session Fixation
+	"jwt-secret-hardcoded":        "CWE-312",  // Cleartext Storage of Sensitive Information
+	"csrf":                        "CWE-352",  // Cross-Site Request Forgery
+}
+
+// patternCWE returns the CWE ID for a given pattern name and category.
+// ruleCWE takes precedence over categoryCWE; unknown patterns return "".
+func patternCWE(name, category string) string {
+	if cwe, ok := ruleCWE[name]; ok {
+		return cwe
+	}
+	if cwe, ok := categoryCWE[category]; ok {
+		return cwe
+	}
+	return ""
+}
+
 // sarifLevel maps Atheon severity to SARIF's level enum
 // (none/note/warning/error). The historical behaviour escalated any
 // unknown severity to "warning", which is wrong — an empty severity
@@ -400,8 +470,7 @@ func buildSARIFRules(findings []core.Finding) []map[string]any {
 			"fullDescription": map[string]any{
 				"text": "Atheon pattern " + p.Name() + " from category '" + p.Category() + "' matched a line. See the rule's match regex in community/" + p.Category() + "/" + p.Name() + ".yaml.",
 			},
-			"helpUri": "https://github.com/aliasfoxkde/Atheon-Enhanced/wiki/patterns#" + p.Name(),
-			"kind":    "rule",
+			"kind": "rule",
 			"defaultConfiguration": map[string]any{
 				"level": sarifLevel(p.Severity()),
 			},
@@ -444,15 +513,14 @@ func buildSARIFResults(findings []core.Finding) []map[string]any {
 		// pipeline. redact() keeps the first/last 4 chars so the
 		// operator can still recognise the match shape.
 		region["snippet"] = map[string]any{"text": redact(f.Content)}
-
-		results = append(results, map[string]any{
+		fingerprint := f.Fingerprint
+		if fingerprint == "" {
+			fingerprint = fmt.Sprintf("%s|%s|%d|%d", f.Pattern, f.File, f.Line, f.Column)
+		}
+		entry := map[string]any{
 			"ruleId": f.Pattern,
 			"level":  sarifLevel(f.Severity),
 			"message": map[string]any{
-				// The message text is the human-readable explanation
-				// GitHub surfaces. Use the file path + line as the
-				// primary signal; the snippet is in region.snippet
-				// for context.
 				"text": fmt.Sprintf("%s found in %s at line %d", f.Pattern, f.File, f.Line),
 			},
 			"locations": []map[string]any{
@@ -466,16 +534,25 @@ func buildSARIFResults(findings []core.Finding) []map[string]any {
 					},
 				},
 			},
-			// partialFingerprints lets GitHub's deduplication merge
-			// results across runs without exact-match fragility
-			// (whitespace, line shifts). Hash of (pattern + file +
-			// line + column) — content is excluded so an operator
-			// editing the matched line still gets one alert per
-			// logical location.
 			"partialFingerprints": map[string]any{
-				"atheonLoc": fmt.Sprintf("%s|%s|%d|%d", f.Pattern, f.File, f.Line, f.Column),
+				"atheonLoc": fingerprint,
 			},
-		})
+		}
+		if cwe := patternCWE(f.Pattern, f.Category); cwe != "" {
+			entry["relationships"] = []map[string]any{
+				{
+					"target": map[string]any{
+						"id":    cwe,
+						"index": -1,
+						"toolComponent": map[string]any{
+							"name": "CWE",
+						},
+					},
+					"kinds": []string{"relevant"},
+				},
+			}
+		}
+		results = append(results, entry)
 	}
 	return results
 }

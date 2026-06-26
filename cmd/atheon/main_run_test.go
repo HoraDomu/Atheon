@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -298,12 +300,19 @@ func TestRunUpdateSuccess(t *testing.T) {
 	body := buf.Bytes()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "checksums.txt") || r.URL.Path == "/checksums.txt" {
+			h := sha256.New()
+			h.Write(body)
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(hex.EncodeToString(h.Sum(nil)) + "  patterns.bundle\n")) //nolint:errcheck
+			return
+		}
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(body)
 	}))
 	defer srv.Close()
 
-	restoreURL := core.SetBundleDownloadURL(srv.URL)
+	restoreURL := core.SetBundleDownloadURLForTest(srv.URL + "/")
 	defer restoreURL()
 
 	// Save and restore the on-disk bundle so the test is non-destructive.
@@ -375,7 +384,7 @@ func TestRunUpdateDownloadError(t *testing.T) {
 	// fails deterministically without network access.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	srv.Close()
-	restore := core.SetBundleDownloadURL(srv.URL)
+	restore := core.SetBundleDownloadURLForTest(srv.URL)
 	defer restore()
 
 	if code := run(context.Background(), []string{"update"}); code != 1 {

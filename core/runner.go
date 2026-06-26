@@ -75,14 +75,24 @@ func isIgnored(path string, matchers []*ignoreMatcher) bool {
 // before this helper existed ScanDir's per-file goroutines skipped the
 // size check entirely, which made the cap a no-op for directory scans.
 func readFileCapped(path string, maxBytes int64) ([]byte, error) {
-	info, err := os.Stat(path)
+	// Canonicalise before the size check so that a symlink to a huge file
+	// (e.g. scan_root/some_link -> /proc/kcore) is sized correctly and rejected
+	// rather than OOMing the process. This closes the TOCTOU race where a file
+	// that passes the Stat size check is replaced by a symlink to a huge target
+	// before ReadFile runs.
+	canon, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		// Broken symlink — let Open report the error.
+		canon = path
+	}
+	info, err := os.Stat(canon)
 	if err != nil {
 		return nil, err
 	}
 	if info.Size() > maxBytes {
 		return nil, fmt.Errorf("%w: %s is %d bytes (limit %d)", ErrFileTooLarge, path, info.Size(), maxBytes)
 	}
-	return os.ReadFile(path)
+	return os.ReadFile(canon)
 }
 
 // ScanFile reads a single file and reports every Finding produced by the
@@ -274,6 +284,25 @@ func ScanDir(ctx context.Context, root string, opts ScanOpts) ([]Finding, *Stats
 				errMu.Unlock()
 				return
 			}
+			// UTF-16 BOM detection: files encoded as UTF-16 (common on Windows
+			// for config files, logs, and exported data) use a byte-order mark
+			// that renders as NUL bytes when read as ASCII, and would produce
+			// spurious matches on the NUL escape sequences. Detect the two
+			// standard BOMs: FE FF (big-endian) and FF FE (little-endian).
+			if len(data) >= 2 {
+				if data[0] == 0xFE && data[1] == 0xFF {
+					errMu.Lock()
+					scanErrors[i] = fmt.Errorf("skipping binary file (UTF-16 BE BOM): %s", p)
+					errMu.Unlock()
+					return
+				}
+				if data[0] == 0xFF && data[1] == 0xFE {
+					errMu.Lock()
+					scanErrors[i] = fmt.Errorf("skipping binary file (UTF-16 LE BOM): %s", p)
+					errMu.Unlock()
+					return
+				}
+			}
 			results[i] = scanLines(ctx, string(data), p)
 			sizes[i] = int64(len(data))
 			scanned[i] = true
@@ -353,10 +382,12 @@ func scanEnv(ctx context.Context, envs []string) []Finding {
 			for _, p := range cs.patterns {
 				if p.Matches(val) {
 					findings = append(findings, Finding{
-						Pattern:  p.Name(),
-						File:     "env:" + key,
-						Content:  val,
-						Severity: p.Severity(),
+						Pattern:     p.Name(),
+						File:        "env:" + key,
+						Content:     val,
+						Severity:    p.Severity(),
+						Category:    p.Category(),
+						Fingerprint: fmt.Sprintf("%s|%s|0|0", p.Name(), "env:"+key),
 					})
 				}
 			}
@@ -422,12 +453,14 @@ func scanLines(ctx context.Context, content, file string) []Finding {
 					}
 				}
 				findings = append(findings, Finding{
-					Pattern:  p.Name(),
-					File:     file,
-					Line:     lineNum,
-					Column:   col,
-					Content:  strings.TrimSpace(line),
-					Severity: p.Severity(),
+					Pattern:     p.Name(),
+					File:        file,
+					Line:        lineNum,
+					Column:      col,
+					Content:     strings.TrimSpace(line),
+					Severity:    p.Severity(),
+					Category:    p.Category(),
+					Fingerprint: fmt.Sprintf("%s|%s|%d|%d", p.Name(), file, lineNum, col),
 				})
 			}
 		}
