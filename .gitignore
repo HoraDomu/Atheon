@@ -29,3 +29,7 @@ Thumbs.db
 # tries to add them. See PLAN.md for the canonical repo-local guidance.
 .claude
 CLAUDE.md
+
+# Python cache
+.pytest_cache/
+.ruff_cache/
