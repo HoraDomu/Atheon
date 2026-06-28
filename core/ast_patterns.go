@@ -294,17 +294,11 @@ func detectUnhandledError(fset *token.FileSet, file *ast.File) []ASTFinding {
 
 // Dangerous names for getattr() sink detection (AST9)
 var dangerousGetattrNames = map[string]bool{
-	"exec":      true,
-	"eval":      true,
-	"system":    true,
-	"popen":     true,
+	"exec":       true,
+	"eval":       true,
+	"system":     true,
+	"popen":      true,
 	"__import__": true,
-}
-
-// Dynamic import names
-var dangerousImportNames = map[string]bool{
-	"__import__": true,
-	"importlib":  true,
 }
 
 // detectDynamicGetattr detects AST7: getattr() with non-literal attribute name
