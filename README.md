@@ -85,6 +85,36 @@
 | **[Enhanced Version](https://github.com/aliasfoxkde/Atheon-Enhanced)** | Feature-rich testing build | 🧪 Experimental features |
 | **[Project Pulse](https://github.com/aliasfoxkde/Atheon-Enhanced/pulse)** | Activity & updates overview | 📊 Live stats |
 | **[Contributors](https://github.com/aliasfoxkde/Atheon-Enhanced/graphs/contributors)** | Project contributors | 👥 Community |
+| **[Changelog](.github/CHANGELOG.md)** | Release history | 📝 Recent changes |
+| **[Support](.github/SUPPORT.md)** | Help & troubleshooting | ❓ Get assistance |
+| **[Docs](docs/)** | Full documentation | 📖 Browse guides |
+
+---
+
+## 📁 **Repository Structure**
+
+```
+Atheon-Enhanced/
+├── .github/              # GitHub configuration
+│   ├── workflows/        # CI/CD pipelines
+│   ├── ISSUE_TEMPLATE/   # Bug/feature request templates
+│   ├── SUPPORT.md        # Help & troubleshooting guide
+│   ├── CHANGELOG.md      # Quick changelog reference
+│   ├── CODE_OF_CONDUCT.md
+│   ├── CONTRIBUTING.md
+│   └── SECURITY.md
+├── docs/                 # Full documentation
+│   ├── architecture/     # System architecture
+│   ├── development/       # Developer guides
+│   ├── integrations/      # MCP & tool integrations
+│   ├── reports/          # Analysis & comparison reports
+│   └── *.md              # Guides and references
+├── community/            # Pattern definitions
+│   └── ai-detection/      # AI detection patterns
+├── cmd/                  # CLI & MCP server
+├── core/                 # Core scanning engine
+└── config/               # Configuration profiles
+```
 
 ---
 
