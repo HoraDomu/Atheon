@@ -1,0 +1,10 @@
+name: prompt-injection-override
+category: security-hardening
+match: '(?i)(override\s+(safety|security|system)|bypass\s+(safety|restrictions))'
+enabled: true
+severity: high
+description: "Prompt injection - safety override pattern detected"
+reference: "https://llmtop10.com/"
+tags:
+  - prompt-injection
+  - safety-override

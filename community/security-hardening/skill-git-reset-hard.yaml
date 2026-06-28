@@ -1,0 +1,10 @@
+name: skill-git-reset-hard
+category: security-hardening
+match: 'git\s+reset\s+--hard\s+(HEAD|~[0-9]+|\.)'
+enabled: true
+severity: high
+description: "Skill resetting git history with reset --hard"
+reference: "https://llmtop10.com/"
+tags:
+  - skill-security
+  - destructive-action

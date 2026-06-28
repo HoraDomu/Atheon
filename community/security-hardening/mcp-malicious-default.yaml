@@ -1,0 +1,10 @@
+name: mcp-malicious-default
+category: security-hardening
+match: '(curl|wget|bash\s+-c)\s+.*https?://'
+enabled: true
+severity: high
+description: "MCP tool default contains shell command to remote URL"
+reference: "https://modelcontextprotocol.io/"
+tags:
+  - mcp-security
+  - malicious-default

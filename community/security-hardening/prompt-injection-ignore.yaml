@@ -1,0 +1,10 @@
+name: prompt-injection-ignore
+category: security-hardening
+match: '(?i)(ignore\s+(all\s+)?(previous\s+)?(instructions?|rules|safety|security))'
+enabled: true
+severity: high
+description: "Prompt injection - instruction override pattern detected"
+reference: "https://llmtop10.com/"
+tags:
+  - prompt-injection
+  - instruction-override

@@ -1,0 +1,10 @@
+name: skill-remote-eval
+category: security-hardening
+match: '(eval|exec)\s*\(\s*(requests\.|urllib\.|http)'
+enabled: true
+severity: critical
+description: "Skill executes code fetched from remote URL"
+reference: "https://llmtop10.com/"
+tags:
+  - skill-security
+  - remote-execution

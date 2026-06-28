@@ -1,0 +1,10 @@
+name: mcp-hidden-instructions
+category: security-hardening
+match: '(?i)(ignore\s+(previous|all)\s+(instructions?|rules)|override\s+system|disregard\s+(any\s+)?(previous\s+)?(instructions?|rules))'
+enabled: true
+severity: high
+description: "MCP tool contains hidden instructions that attempt to override AI safety"
+reference: "https://modelcontextprotocol.io/"
+tags:
+  - mcp-security
+  - hidden-instructions

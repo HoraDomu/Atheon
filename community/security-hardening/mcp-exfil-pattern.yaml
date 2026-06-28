@@ -1,0 +1,10 @@
+name: mcp-exfil-pattern
+category: security-hardening
+match: '(?i)(send\s+(to|conversation|context)|exfiltrate|upload\s+conversation|transmit\s+conversation)'
+enabled: true
+severity: high
+description: "MCP tool description contains data exfiltration pattern"
+reference: "https://modelcontextprotocol.io/"
+tags:
+  - mcp-security
+  - exfiltration

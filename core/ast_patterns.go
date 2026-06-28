@@ -64,6 +64,24 @@ var builtinASTPatterns = []ASTPattern{
 		Severity:    "medium",
 		Func:        detectUnhandledError,
 	},
+	{
+		Name:        "dynamic-getattr",
+		Description: "Dynamic attribute access via getattr with non-literal name",
+		Severity:    "low",
+		Func:        detectDynamicGetattr,
+	},
+	{
+		Name:        "reflective-getattr-sink",
+		Description: "Reflective getattr with dangerous literal sink name (e.g., getattr(os, 'system'))",
+		Severity:    "high",
+		Func:        detectReflectiveGetattrSink,
+	},
+	{
+		Name:        "dangerous-execution-chain",
+		Description: "Dangerous execution chain - exec/eval/compile with dynamic source",
+		Severity:    "critical",
+		Func:        detectDangerousExecutionChain,
+	},
 }
 
 // ScanFileAST performs AST-based pattern scanning on a single Go file.
@@ -272,6 +290,202 @@ func detectUnhandledError(fset *token.FileSet, file *ast.File) []ASTFinding {
 	})
 
 	return findings
+}
+
+// Dangerous names for getattr() sink detection (AST9)
+var dangerousGetattrNames = map[string]bool{
+	"exec":      true,
+	"eval":      true,
+	"system":    true,
+	"popen":     true,
+	"__import__": true,
+}
+
+// Dynamic import names
+var dangerousImportNames = map[string]bool{
+	"__import__": true,
+	"importlib":  true,
+}
+
+// detectDynamicGetattr detects AST7: getattr() with non-literal attribute name
+func detectDynamicGetattr(fset *token.FileSet, file *ast.File) []ASTFinding {
+	var findings []ASTFinding
+
+	ast.Inspect(file, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+
+		// Check if this is a getattr call
+		if !isGetattrCall(call) {
+			return true
+		}
+
+		// getattr requires at least 2 args: object and attribute name
+		if len(call.Args) < 2 {
+			return true
+		}
+
+		// Check if second argument is NOT a literal (meaning dynamic attribute name)
+		secondArg := call.Args[1]
+		if isStringLiteral(secondArg) {
+			// This is AST9 (reflective getattr sink), not AST7
+			return true
+		}
+
+		findings = append(findings, ASTFinding{
+			Line:     fset.Position(call.Pos()).Line,
+			Message:  "Dynamic attribute access via getattr() with non-literal name",
+			Severity: "low",
+		})
+		return true
+	})
+
+	return findings
+}
+
+// detectReflectiveGetattrSink detects AST9: getattr with dangerous literal sink name
+func detectReflectiveGetattrSink(fset *token.FileSet, file *ast.File) []ASTFinding {
+	var findings []ASTFinding
+
+	ast.Inspect(file, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+
+		if !isGetattrCall(call) {
+			return true
+		}
+
+		if len(call.Args) < 2 {
+			return true
+		}
+
+		secondArg := call.Args[1]
+		if !isStringLiteral(secondArg) {
+			return true
+		}
+
+		// Extract the literal string value
+		if lit, ok := secondArg.(*ast.BasicLit); ok && lit.Kind == token.STRING {
+			// Remove quotes
+			val := lit.Value
+			if len(val) >= 2 {
+				val = val[1 : len(val)-1]
+			}
+			if dangerousGetattrNames[val] {
+				findings = append(findings, ASTFinding{
+					Line:     fset.Position(call.Pos()).Line,
+					Message:  fmt.Sprintf("Reflective dangerous call via getattr() with literal sink name: %s", val),
+					Severity: "high",
+				})
+			}
+		}
+		return true
+	})
+
+	return findings
+}
+
+// detectDangerousExecutionChain detects AST8: exec/eval/compile with dangerous source
+func detectDangerousExecutionChain(fset *token.FileSet, file *ast.File) []ASTFinding {
+	var findings []ASTFinding
+
+	ast.Inspect(file, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+
+		// Check if this is exec, eval, or compile
+		name := getCallName(call)
+		if name != "exec" && name != "eval" && name != "compile" {
+			return true
+		}
+
+		// Check if arguments contain dangerous sources
+		for _, arg := range call.Args {
+			if containsDangerousSource(arg) {
+				findings = append(findings, ASTFinding{
+					Line:     fset.Position(call.Pos()).Line,
+					Message:  fmt.Sprintf("Dangerous execution chain: %s() with dynamic source", name),
+					Severity: "critical",
+				})
+				break
+			}
+		}
+		return true
+	})
+
+	return findings
+}
+
+// containsDangerousSource checks if an AST node contains a dangerous source
+// that could be used in an execution chain (e.g., __import__, subprocess, etc.)
+func containsDangerousSource(n ast.Node) bool {
+	var found bool
+	ast.Inspect(n, func(node ast.Node) bool {
+		if found {
+			return false
+		}
+
+		call, ok := node.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+
+		name := getCallName(call)
+		if name == "" {
+			return true
+		}
+
+		// Check for dangerous sources
+		if name == "__import__" || name == "importlib.__import__" {
+			found = true
+			return false
+		}
+
+		// Check for remote fetch patterns (simplified)
+		if name == "requests.get" || name == "requests.post" ||
+			name == "urllib.request.urlopen" || name == "httpx.get" ||
+			name == "urllib.request.urlretrieve" {
+			found = true
+			return false
+		}
+
+		// Check for encoding functions often used in obfuscation
+		if name == "base64.b64decode" || name == "base64.decode" ||
+			name == "codecs.decode" || name == "marshal.loads" {
+			found = true
+			return false
+		}
+
+		return true
+	})
+	return found
+}
+
+// getCallName returns the full name of a call expression (e.g., "os.environ.get")
+func getCallName(call *ast.CallExpr) string {
+	if ident, ok := call.Fun.(*ast.Ident); ok {
+		return ident.Name
+	}
+	if sel, ok := call.Fun.(*ast.SelectorExpr); ok {
+		if ident, ok := sel.X.(*ast.Ident); ok {
+			return ident.Name + "." + sel.Sel.Name
+		}
+	}
+	return ""
+}
+
+// isGetattrCall returns true if this call is getattr
+func isGetattrCall(call *ast.CallExpr) bool {
+	if ident, ok := call.Fun.(*ast.Ident); ok {
+		return ident.Name == "getattr"
+	}
+	return false
 }
 
 func isQueryMethod(call *ast.CallExpr) bool {
