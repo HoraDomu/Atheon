@@ -1,0 +1,14 @@
+name: graphql-query-depth-unlimited
+category: graphql
+severity: high
+cwe: "CWE-400"
+description: "Detects GraphQL without query depth limiting"
+match: (?:maxDepth|defaultMaxDepth|queryDepth)\s*[:=]\s*(?:0|null|undefined|false)
+remediation: "Set maxDepth or query depth limit to prevent DoS from nested queries"
+enabled: true
+tags:
+  - graphql
+  - dos
+  - query-complexity
+standards:
+  - api-security
